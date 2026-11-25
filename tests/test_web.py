@@ -3,6 +3,7 @@ import time
 from types import SimpleNamespace
 
 import pytest
+from starlette.responses import RedirectResponse
 from starlette.testclient import TestClient
 
 from app.store import Store
@@ -55,4 +56,36 @@ def test_profile_and_consent(tmp_path, telegram_id):
         assert store.award_daily("2026-11-25") == 1
         page = client.get("/")
         assert "Влился в беседу" in page.text
+        assert page.text.count('href="/achievements/joined-the-conversation"') == 2
         assert '<time datetime="2026-11-25">' in page.text
+
+
+def test_achievement_deep_link_after_first_award(tmp_path):
+    store = Store(tmp_path / "app.db")
+    config = SimpleNamespace(allowed_ids={2, 3}, public_url="https://example.test",
+                             session_secret="test-secret", client_id="id", client_secret="secret")
+    app = create_app(config, store)
+
+    class Telegram:
+        async def authorize_redirect(self, request, redirect_uri):
+            return RedirectResponse("/auth/callback")
+
+        async def authorize_access_token(self, request):
+            return {"userinfo": {"id": "3"}}
+
+    app.state.telegram = Telegram()
+    path = "/achievements/joined-the-conversation"
+    with TestClient(app, base_url=config.public_url) as client:
+        assert client.get("/auth/callback").status_code == 200
+        assert client.get(path).status_code == 404
+        store.set_consent(2, True, 1)
+        for message_id in range(10):
+            assert store.record_message(1, message_id, 2, 2)
+        assert store.award_daily("2026-11-25") == 1
+        client.cookies.clear()
+        assert client.get(path, follow_redirects=False).status_code == 303
+        page = client.get(path)
+        assert page.status_code == 200
+        assert page.url.path == path
+        assert "За 10 учтённых сообщений" in page.text
+        assert client.get("/login?achievement=//example.org").url.path == "/"

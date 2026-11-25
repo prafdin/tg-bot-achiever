@@ -16,9 +16,10 @@
     <h1>Мои ачивки</h1>
     <section>
         <h2>Актуальные ачивки</h2>
-        <p>{{ award_name if day else "Пока нет ачивок." }}</p>
+        {% if day %}<p><a href="{{ award_path }}">{{ award_name }}</a></p>
+        {% else %}<p>Пока нет ачивок.</p>{% endif %}
         <h2>История</h2>
-        {% if day %}<p><time datetime="{{ day }}">{{ day }}</time> · Получена ачивка «{{ award_name }}»</p>
+        {% if day %}<p><time datetime="{{ day }}">{{ day }}</time> · Получена ачивка «<a href="{{ award_path }}">{{ award_name }}</a>»</p>
         {% else %}<p>Награждений пока нет.</p>{% endif %}
     </section>
     <section>

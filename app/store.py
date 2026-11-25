@@ -3,6 +3,9 @@ from contextlib import closing, contextmanager
 
 
 AWARD_NAME = "Влился в беседу"
+AWARD_SLUG = "joined-the-conversation"
+AWARD_PATH = f"/achievements/{AWARD_SLUG}"
+AWARD_MESSAGE_COUNT = 10
 
 
 class Store:
@@ -53,8 +56,8 @@ class Store:
                 return 0
             result = db.execute("""
                 INSERT OR IGNORE INTO awards
-                SELECT user_id, ? FROM messages GROUP BY user_id HAVING count(*) >= 10
-            """, (local_date,))
+                SELECT user_id, ? FROM messages GROUP BY user_id HAVING count(*) >= ?
+            """, (local_date, AWARD_MESSAGE_COUNT))
             if not result.rowcount:
                 db.execute("UPDATE daily SET sent = 1 WHERE day = ?", (local_date,))
             return result.rowcount
@@ -65,6 +68,10 @@ class Store:
                                  "ORDER BY changed_at DESC LIMIT 1", (user_id,)).fetchone()
             award = db.execute("SELECT day FROM awards WHERE user_id = ?", (user_id,)).fetchone()
             return bool(consent and consent[0]), award[0] if award else None
+
+    def achievement_discovered(self):
+        with self.transaction() as db:
+            return db.execute("SELECT 1 FROM awards LIMIT 1").fetchone() is not None
 
     def pending_digest(self):
         with self.transaction() as db:

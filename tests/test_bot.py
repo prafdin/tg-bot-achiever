@@ -47,7 +47,10 @@ def test_daily_digest(tmp_path):
     asyncio.run(run_daily(config, store, telegram, "2026-11-26"))
     assert len(calls) == 1
     assert calls[0][0] == "sendMessage"
-    assert config.public_url in calls[0][1]["text"]
+    assert calls[0][1]["reply_markup"]["inline_keyboard"] == [[{
+        "text": "Влился в беседу",
+        "url": "https://example.test/achievements/joined-the-conversation",
+    }]]
 
 
 def test_digest_survives_failed_delivery(tmp_path):

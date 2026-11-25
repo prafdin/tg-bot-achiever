@@ -14,7 +14,7 @@ from starlette.responses import PlainTextResponse, RedirectResponse
 from starlette.routing import Route
 from starlette.templating import Jinja2Templates
 
-from app.store import AWARD_NAME
+from app.store import AWARD_MESSAGE_COUNT, AWARD_NAME, AWARD_PATH, AWARD_SLUG
 
 
 LOGGER = logging.getLogger(__name__)
@@ -40,13 +40,26 @@ def create_app(settings, store, lifespan=None):
         context = {"identity": identity, "paused": getattr(settings, "paused", False)}
         if identity is not None:
             enabled, day = store.profile(identity)
-            context.update(enabled=enabled, day=day, award_name=AWARD_NAME,
+            context.update(enabled=enabled, day=day, award_name=AWARD_NAME, award_path=AWARD_PATH,
                            csrf=request.session.setdefault("csrf", secrets.token_urlsafe(32)))
         return templates.TemplateResponse(request, "profile.html", context,
                                           headers={"Cache-Control": "no-store"})
 
+    async def achievement(request):
+        headers = {"Cache-Control": "no-store"}
+        if user_id(request) is None:
+            return RedirectResponse(f"/login?achievement={AWARD_SLUG}", status_code=303, headers=headers)
+        if not store.achievement_discovered():
+            return PlainTextResponse("Ачивка не найдена.", status_code=404, headers=headers)
+        return templates.TemplateResponse(request, "achievement.html", {
+            "award_name": AWARD_NAME,
+            "message_count": AWARD_MESSAGE_COUNT,
+        }, headers=headers)
+
     async def login(request):
         request.session.clear()
+        if request.query_params.get("achievement") == AWARD_SLUG:
+            request.session["achievement"] = AWARD_SLUG
         try:
             return await request.app.state.telegram.authorize_redirect(
                 request, settings.public_url + "/auth/callback")
@@ -74,6 +87,7 @@ def create_app(settings, store, lifespan=None):
             return PlainTextResponse("Не удалось проверить ответ Telegram.", status_code=400)
         except httpx.HTTPError:
             return PlainTextResponse("Вход временно недоступен.", status_code=502)
+        achievement_requested = request.session.get("achievement") == AWARD_SLUG
         request.session.clear()
         if type(identity) is str:
             identity = allowed_ids_by_text.get(identity)
@@ -81,7 +95,7 @@ def create_app(settings, store, lifespan=None):
             LOGGER.warning("Telegram login: missing or disallowed Telegram ID")
             return PlainTextResponse("Доступ к профилю закрыт.", status_code=403)
         request.session["user_id"] = identity
-        return RedirectResponse("/", status_code=303)
+        return RedirectResponse(AWARD_PATH if achievement_requested else "/", status_code=303)
 
     async def consent(request):
         identity = user_id(request)
@@ -99,7 +113,8 @@ def create_app(settings, store, lifespan=None):
         return RedirectResponse("/", status_code=303)
 
     app = Starlette(lifespan=lifespan, routes=[
-        Route("/", profile), Route("/login", login), Route("/auth/callback", callback),
+        Route("/", profile), Route(AWARD_PATH, achievement), Route("/login", login),
+        Route("/auth/callback", callback),
         Route("/consent", consent, methods=["POST"]),
     ])
     app.add_middleware(SessionMiddleware, secret_key=settings.session_secret,

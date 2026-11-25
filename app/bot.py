@@ -6,7 +6,7 @@ from datetime import datetime
 
 import httpx2 as httpx
 
-from app.store import AWARD_NAME
+from app.store import AWARD_NAME, AWARD_PATH
 
 LOGGER = logging.getLogger(__name__)
 CONTENT_FIELDS = {
@@ -96,9 +96,8 @@ async def send_pending_digests(settings, store, telegram):
             labels.append(name or "Участник чата")
 
         heading = f"🏅 «{AWARD_NAME}» · {day}\n"
-        footer = f"\n\n{settings.public_url}"
         lines = []
-        size = len(heading) + len(footer)
+        size = len(heading)
         for label in labels:
             line = f"• {label}\n"
             if size + len(line) > 3900:
@@ -107,7 +106,11 @@ async def send_pending_digests(settings, store, telegram):
             lines.append(line)
             size += len(line)
         await telegram("sendMessage", chat_id=settings.chat_id,
-                       text=heading + "".join(lines).rstrip() + footer)
+                       text=heading + "".join(lines).rstrip(),
+                       reply_markup={"inline_keyboard": [[{
+                           "text": AWARD_NAME,
+                           "url": settings.public_url + AWARD_PATH,
+                       }]]})
         store.mark_digest_sent(day)
 
 

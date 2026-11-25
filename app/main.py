@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 import httpx2 as httpx
 
-from app.bot import Telegram, poll, schedule
+from app.bot import Telegram, get_member_name, poll, schedule
 from app.store import Store
 from app.web import create_app
 
@@ -69,6 +69,14 @@ def build_app(settings):
     async def lifespan(app):
         async with httpx.AsyncClient(timeout=40) as client:
             telegram = Telegram(client, settings.bot_token)
+
+            async def resolve_member_name(identity):
+                try:
+                    return await asyncio.wait_for(get_member_name(telegram, settings.chat_id, identity), timeout=3)
+                except asyncio.TimeoutError:
+                    return None
+
+            app.state.resolve_member_name = resolve_member_name
             tasks = [asyncio.create_task(poll(settings, store, telegram)),
                      asyncio.create_task(schedule(settings, store, telegram))]
             try:

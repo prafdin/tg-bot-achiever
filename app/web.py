@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import secrets
 import time
@@ -35,15 +36,50 @@ def create_app(settings, store, lifespan=None):
         value = request.session.get("user_id")
         return value if value in settings.allowed_ids else None
 
-    async def profile(request):
-        identity = user_id(request)
-        context = {"identity": identity, "paused": getattr(settings, "paused", False)}
+    async def participant_name(request, identity):
+        resolver = getattr(request.app.state, "resolve_member_name", None)
+        name = await resolver(identity) if resolver else None
+        return name or f"Участник {identity}"
+
+    def render_profile(request, identity, viewer, name=None):
+        own_profile = identity is not None and identity == viewer
+        context = {"identity": identity, "own_profile": own_profile, "participant_name": name}
         if identity is not None:
             enabled, day = store.profile(identity)
-            context.update(enabled=enabled, day=day, award_name=AWARD_NAME, award_path=AWARD_PATH,
+            context.update(day=day, award_name=AWARD_NAME, award_path=AWARD_PATH)
+        if own_profile:
+            context.update(enabled=enabled, paused=getattr(settings, "paused", False),
                            csrf=request.session.setdefault("csrf", secrets.token_urlsafe(32)))
         return templates.TemplateResponse(request, "profile.html", context,
                                           headers={"Cache-Control": "no-store"})
+
+    async def profile(request):
+        identity = user_id(request)
+        return render_profile(request, identity, identity)
+
+    async def participants(request):
+        viewer = user_id(request)
+        headers = {"Cache-Control": "no-store"}
+        if viewer is None:
+            return RedirectResponse("/login", status_code=303, headers=headers)
+        identities = sorted(settings.allowed_ids)
+        names = await asyncio.gather(*(participant_name(request, identity) for identity in identities))
+        members = sorted(zip(identities, names), key=lambda member: member[1].casefold())
+        return templates.TemplateResponse(request, "participants.html", {
+            "members": members, "viewer": viewer,
+        }, headers=headers)
+
+    async def participant_profile(request):
+        viewer = user_id(request)
+        headers = {"Cache-Control": "no-store"}
+        if viewer is None:
+            return RedirectResponse("/login", status_code=303, headers=headers)
+        identity = request.path_params["identity"]
+        if identity not in settings.allowed_ids:
+            return PlainTextResponse("Участник не найден.", status_code=404, headers=headers)
+        if identity == viewer:
+            return RedirectResponse("/", status_code=303, headers=headers)
+        return render_profile(request, identity, viewer, await participant_name(request, identity))
 
     async def achievement(request):
         headers = {"Cache-Control": "no-store"}
@@ -114,6 +150,7 @@ def create_app(settings, store, lifespan=None):
 
     app = Starlette(lifespan=lifespan, routes=[
         Route("/", profile), Route(AWARD_PATH, achievement), Route("/login", login),
+        Route("/participants", participants), Route("/participants/{identity:int}", participant_profile),
         Route("/auth/callback", callback),
         Route("/consent", consent, methods=["POST"]),
     ])

@@ -82,17 +82,21 @@ async def run_daily(settings, store, telegram, local_date):
     await send_pending_digests(settings, store, telegram)
 
 
+async def get_member_name(telegram, chat_id, user_id):
+    try:
+        member = await telegram("getChatMember", chat_id=chat_id, user_id=user_id)
+    except TelegramError:
+        return None
+    user = member["user"] if member else {}
+    return " ".join(part for key in ("first_name", "last_name") if (part := user.get(key))) or None
+
+
 async def send_pending_digests(settings, store, telegram):
     while (digest := store.pending_digest()) is not None:
         day, users = digest
         labels = []
         for user_id in users:
-            try:
-                member = await telegram("getChatMember", chat_id=settings.chat_id, user_id=user_id)
-                user = member["user"] if member else {}
-            except TelegramError:
-                user = {}
-            name = " ".join(part for key in ("first_name", "last_name") if (part := user.get(key)))
+            name = await get_member_name(telegram, settings.chat_id, user_id)
             labels.append(name or "Участник чата")
 
         heading = f"🏅 «{AWARD_NAME}» · {day}\n"

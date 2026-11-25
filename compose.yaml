@@ -1,0 +1,12 @@
+services:
+  achiever:
+    build: .
+    env_file: ${ACHIEVER_ENV_FILE:-.env}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ACHIEVER_PORT:-8000}:8000"
+    volumes:
+      - achiever-data:/data
+
+volumes:
+  achiever-data:

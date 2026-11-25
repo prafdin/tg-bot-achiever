@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tg-bot-achiever"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "authlib==1.9.10",
+    "httpx2==2.14.0",
+    "itsdangerous==2.2.0",
+    "jinja2==3.1.6",
+    "joserfc==1.7.7",
+    "python-multipart==0.0.32",
+    "starlette==1.7.0",
+    "uvicorn==0.54.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.2.0"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+app = ["templates/*.html"]

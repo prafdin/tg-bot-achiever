@@ -8,6 +8,16 @@ from app.store import Store
 from app.web import create_app
 
 
+def test_callback_without_login_session(tmp_path):
+    store = Store(tmp_path / "app.db")
+    config = SimpleNamespace(allowed_ids={2}, public_url="https://example.test",
+                             session_secret="test-secret", client_id="id", client_secret="secret")
+    with TestClient(create_app(config, store), base_url=config.public_url) as client:
+        response = client.get("/auth/callback?code=unused&state=unknown")
+        assert response.status_code == 400
+        assert "том же браузере" in response.text
+
+
 def test_profile_and_consent(tmp_path):
     store = Store(tmp_path / "app.db")
     config = SimpleNamespace(allowed_ids={2}, public_url="https://example.test",

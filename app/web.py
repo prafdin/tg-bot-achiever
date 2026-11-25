@@ -1,9 +1,11 @@
+import logging
 import secrets
 import time
 from pathlib import Path
 
 import httpx2 as httpx
 from authlib.integrations.base_client import OAuthError
+from authlib.integrations.base_client.errors import MismatchingStateError
 from authlib.integrations.starlette_client import OAuth
 from joserfc.errors import JoseError
 from starlette.applications import Starlette
@@ -13,6 +15,10 @@ from starlette.routing import Route
 from starlette.templating import Jinja2Templates
 
 from app.store import AWARD_NAME
+
+
+LOGGER = logging.getLogger(__name__)
+OAUTH_ERRORS = {"access_denied", "invalid_client", "invalid_grant", "invalid_request", "unauthorized_client"}
 
 
 def create_app(settings, store, lifespan=None):
@@ -51,12 +57,26 @@ def create_app(settings, store, lifespan=None):
             token = await request.app.state.telegram.authorize_access_token(request)
             claims = token.get("userinfo") or {}
             identity = claims.get("id")
-        except (OAuthError, JoseError, ValueError):
-            identity = None
+        except MismatchingStateError:
+            LOGGER.warning("Telegram login: OAuth state did not match; session cookie present: %s",
+                           "session" in request.cookies)
+            return PlainTextResponse(
+                "Сессия входа не найдена. Откройте сайт и начните вход заново в том же браузере.",
+                status_code=400,
+            )
+        except OAuthError as exc:
+            error = exc.error if exc.error in OAUTH_ERRORS else "other"
+            LOGGER.warning("Telegram login: OAuth error %s", error)
+            return PlainTextResponse("Telegram не завершил вход. Начните вход заново.", status_code=400)
+        except (JoseError, ValueError) as exc:
+            LOGGER.warning("Telegram login: token validation error %s", type(exc).__name__)
+            return PlainTextResponse("Не удалось проверить ответ Telegram.", status_code=400)
         except httpx.HTTPError:
             return PlainTextResponse("Вход временно недоступен.", status_code=502)
         request.session.clear()
         if type(identity) is not int or identity not in settings.allowed_ids:
+            LOGGER.warning("Telegram login: %s", "ID not allowed" if type(identity) is int
+                           else f"unexpected ID type ({type(identity).__name__})")
             return PlainTextResponse("Доступ к профилю закрыт.", status_code=403)
         request.session["user_id"] = identity
         return RedirectResponse("/", status_code=303)

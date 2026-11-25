@@ -35,7 +35,7 @@ def test_daily_digest(tmp_path):
 
     async def telegram(method, **data):
         if method == "getChatMember":
-            return {"user": {"first_name": "Участник"}}
+            return {"user": {"first_name": "Имя <&>"}}
         calls.append((method, data))
 
     asyncio.run(run_daily(config, store, telegram, "2026-11-25"))
@@ -47,10 +47,11 @@ def test_daily_digest(tmp_path):
     asyncio.run(run_daily(config, store, telegram, "2026-11-26"))
     assert len(calls) == 1
     assert calls[0][0] == "sendMessage"
-    assert calls[0][1]["reply_markup"]["inline_keyboard"] == [[{
-        "text": "Влился в беседу",
-        "url": "https://example.test/achievements/joined-the-conversation",
-    }]]
+    payload = calls[0][1]
+    assert payload["parse_mode"] == "HTML"
+    assert '<a href="https://example.test/achievements/joined-the-conversation">Влился в беседу</a>' in payload["text"]
+    assert "Имя &lt;&amp;&gt;" in payload["text"]
+    assert "reply_markup" not in payload
 
 
 def test_digest_survives_failed_delivery(tmp_path):

@@ -3,6 +3,7 @@ import logging
 import sqlite3
 import time
 from datetime import datetime
+from html import escape
 
 import httpx2 as httpx
 
@@ -99,11 +100,12 @@ async def send_pending_digests(settings, store, telegram):
             name = await get_member_name(telegram, settings.chat_id, user_id)
             labels.append(name or "Участник чата")
 
-        heading = f"🏅 «{AWARD_NAME}» · {day}\n"
+        award_url = escape(settings.public_url + AWARD_PATH)
+        heading = f'🏅 «<a href="{award_url}">{escape(AWARD_NAME)}</a>» · {day}\n'
         lines = []
         size = len(heading)
         for label in labels:
-            line = f"• {label}\n"
+            line = f"• {escape(label)}\n"
             if size + len(line) > 3900:
                 lines.append(f"… и ещё {len(labels) - len(lines)}")
                 break
@@ -111,10 +113,7 @@ async def send_pending_digests(settings, store, telegram):
             size += len(line)
         await telegram("sendMessage", chat_id=settings.chat_id,
                        text=heading + "".join(lines).rstrip(),
-                       reply_markup={"inline_keyboard": [[{
-                           "text": AWARD_NAME,
-                           "url": settings.public_url + AWARD_PATH,
-                       }]]})
+                       parse_mode="HTML", link_preview_options={"is_disabled": True})
         store.mark_digest_sent(day)
 
 

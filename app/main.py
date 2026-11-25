@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -23,6 +24,7 @@ class Settings:
     public_url: str
     chat_id: int
     allowed_ids: frozenset[int]
+    participant_names: dict[int, str]
     paused: bool
     database: Path
     timezone: ZoneInfo
@@ -46,6 +48,12 @@ class Settings:
         award_time = time.fromisoformat(os.environ.get("AWARD_TIME", "20:00"))
         if award_time.tzinfo is not None:
             raise ValueError("AWARD_TIME задаётся в локальном времени")
+        names = json.loads(os.environ.get("PARTICIPANT_NAMES", "{}"))
+        if not isinstance(names, dict) or any(
+            not (key.isascii() and key.isdecimal() and isinstance(name, str) and name.strip())
+            for key, name in names.items()
+        ):
+            raise ValueError("PARTICIPANT_NAMES должен быть JSON-объектом с числовыми ID и непустыми именами")
         return cls(
             bot_token=required("BOT_TOKEN"),
             client_id=required("TELEGRAM_CLIENT_ID"),
@@ -54,6 +62,7 @@ class Settings:
             public_url=public_url,
             chat_id=int(required("TELEGRAM_CHAT_ID")),
             allowed_ids=frozenset(map(int, required("ALLOWED_TELEGRAM_IDS").split(","))),
+            participant_names={int(key): name.strip() for key, name in names.items()},
             paused=paused == "1",
             database=Path(os.environ.get("DATABASE_PATH", "achiever.db")),
             timezone=ZoneInfo(os.environ.get("AWARD_TIMEZONE", "Europe/Samara")),

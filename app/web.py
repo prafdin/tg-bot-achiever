@@ -25,6 +25,7 @@ OAUTH_ERRORS = {"access_denied", "invalid_client", "invalid_grant", "invalid_req
 def create_app(settings, store, lifespan=None):
     templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
     allowed_ids_by_text = {str(identity): identity for identity in settings.allowed_ids}
+    participant_names = getattr(settings, "participant_names", {})
     oauth = OAuth()
     telegram = oauth.register(
         "telegram", client_id=settings.client_id, client_secret=settings.client_secret,
@@ -39,7 +40,7 @@ def create_app(settings, store, lifespan=None):
     async def participant_name(request, identity):
         resolver = getattr(request.app.state, "resolve_member_name", None)
         name = await resolver(identity) if resolver else None
-        return name or f"Участник {identity}"
+        return name or participant_names.get(identity) or f"Участник {identity}"
 
     def render_profile(request, identity, viewer, name=None):
         own_profile = identity is not None and identity == viewer

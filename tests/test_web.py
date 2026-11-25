@@ -96,7 +96,8 @@ def test_achievement_deep_link_after_first_award(tmp_path):
 
 def test_participant_directory_and_other_profiles(tmp_path):
     store = Store(tmp_path / "app.db")
-    config = SimpleNamespace(allowed_ids={2, 3, 4}, public_url="https://example.test",
+    config = SimpleNamespace(allowed_ids={2, 3, 4, 5}, public_url="https://example.test",
+                             participant_names={3: "Резервное имя", 4: "Вера", 9: "Нет доступа"},
                              session_secret="test-secret", client_id="id", client_secret="secret")
     app = create_app(config, store)
 
@@ -121,13 +122,16 @@ def test_participant_directory_and_other_profiles(tmp_path):
         directory = client.get("/participants")
         assert directory.status_code == 200
         assert 'href="/participants/3"' in directory.text and "&lt;Борис&gt;" in directory.text
-        assert 'href="/participants/4"' in directory.text and "Участник 4" in directory.text
+        assert 'href="/participants/4"' in directory.text and "Вера" in directory.text
+        assert "Участник 5" in directory.text
+        assert "Резервное имя" not in directory.text and "Нет доступа" not in directory.text
         profile = client.get("/participants/3")
         assert profile.status_code == 200
         assert "Влился в беседу" in profile.text and "История" in profile.text
         assert 'class="status status-on">Сбор включён' in profile.text
         assert 'action="/consent"' not in profile.text
         other = client.get("/participants/4")
+        assert "<h1>Вера</h1>" in other.text
         assert "Пока нет ачивок" in other.text
         assert 'class="status status-off">Сбор выключен' in other.text
         assert client.get("/participants/9").status_code == 404

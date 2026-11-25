@@ -2,6 +2,7 @@ import re
 import time
 from types import SimpleNamespace
 
+import pytest
 from starlette.testclient import TestClient
 
 from app.store import Store
@@ -18,7 +19,8 @@ def test_callback_without_login_session(tmp_path):
         assert "том же браузере" in response.text
 
 
-def test_profile_and_consent(tmp_path):
+@pytest.mark.parametrize("telegram_id", [2, "2"])
+def test_profile_and_consent(tmp_path, telegram_id):
     store = Store(tmp_path / "app.db")
     config = SimpleNamespace(allowed_ids={2}, public_url="https://example.test",
                              session_secret="test-secret", client_id="id", client_secret="secret")
@@ -38,7 +40,9 @@ def test_profile_and_consent(tmp_path):
         assert client.get("/auth/callback").status_code == 403
         telegram.user = {"id": 9}
         assert client.get("/auth/callback").status_code == 403
-        telegram.user = {"id": 2}
+        telegram.user = {"id": "9"}
+        assert client.get("/auth/callback").status_code == 403
+        telegram.user = {"id": telegram_id}
         page = client.get("/auth/callback")
         assert "История" in page.text
         assert client.post("/consent", data={"enabled": "1"}).status_code == 403

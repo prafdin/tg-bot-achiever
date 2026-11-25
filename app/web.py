@@ -23,6 +23,7 @@ OAUTH_ERRORS = {"access_denied", "invalid_client", "invalid_grant", "invalid_req
 
 def create_app(settings, store, lifespan=None):
     templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
+    allowed_ids_by_text = {str(identity): identity for identity in settings.allowed_ids}
     oauth = OAuth()
     telegram = oauth.register(
         "telegram", client_id=settings.client_id, client_secret=settings.client_secret,
@@ -74,9 +75,10 @@ def create_app(settings, store, lifespan=None):
         except httpx.HTTPError:
             return PlainTextResponse("Вход временно недоступен.", status_code=502)
         request.session.clear()
+        if type(identity) is str:
+            identity = allowed_ids_by_text.get(identity)
         if type(identity) is not int or identity not in settings.allowed_ids:
-            LOGGER.warning("Telegram login: %s", "ID not allowed" if type(identity) is int
-                           else f"unexpected ID type ({type(identity).__name__})")
+            LOGGER.warning("Telegram login: missing or disallowed Telegram ID")
             return PlainTextResponse("Доступ к профилю закрыт.", status_code=403)
         request.session["user_id"] = identity
         return RedirectResponse("/", status_code=303)

@@ -46,10 +46,10 @@ def create_app(settings, store, lifespan=None):
         context = {"identity": identity, "own_profile": own_profile, "participant_name": name}
         if identity is not None:
             enabled, day = store.profile(identity)
-            context.update(day=day, award_name=AWARD_NAME, award_path=AWARD_PATH)
+            context.update(day=day, award_name=AWARD_NAME, award_path=AWARD_PATH,
+                           enabled=enabled, paused=getattr(settings, "paused", False))
         if own_profile:
-            context.update(enabled=enabled, paused=getattr(settings, "paused", False),
-                           csrf=request.session.setdefault("csrf", secrets.token_urlsafe(32)))
+            context["csrf"] = request.session.setdefault("csrf", secrets.token_urlsafe(32))
         return templates.TemplateResponse(request, "profile.html", context,
                                           headers={"Cache-Control": "no-store"})
 

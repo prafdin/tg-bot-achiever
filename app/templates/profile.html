@@ -26,22 +26,24 @@
         {% if day %}<p><time datetime="{{ day }}">{{ day }}</time> · Получена ачивка «<a href="{{ award_path }}">{{ award_name }}</a>»</p>
         {% else %}<p>Награждений пока нет.</p>{% endif %}
     </section>
-    {% if own_profile %}<section>
+    <section>
         <h2>Сбор данных</h2>
+        {% if own_profile %}
         <p>Бот учитывает факт и время отправки новых сообщений для выдачи ачивок. Тексты и медиа не сохраняются.</p>
+        {% endif %}
         {% if paused %}
             <p class="status status-off">Сбор в чате приостановлен</p>
-            <p>{{ "Твоё согласие включено." if enabled else "Твоё согласие выключено." }}</p>
+            <p>{{ "Согласие на сбор включено." if enabled else "Согласие на сбор выключено." }}</p>
         {% else %}
             <p class="status {{ 'status-on' if enabled else 'status-off' }}">{{ "Сбор включён" if enabled else "Сбор выключен" }}</p>
         {% endif %}
-        <form action="/consent" method="post">
+        {% if own_profile %}<form action="/consent" method="post">
             <input type="hidden" name="csrf" value="{{ csrf }}">
             <button type="submit" name="enabled" value="{{ '0' if enabled else '1' }}">
                 {{ "Выключить сбор" if enabled else "Включить сбор" }}
             </button>
-        </form>
-    </section>{% endif %}
+        </form>{% endif %}
+    </section>
 {% else %}
     <h1>Ачивки чата</h1>
     <a href="/login">Войти через Telegram</a>

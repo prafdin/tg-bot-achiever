@@ -125,6 +125,9 @@ def test_participant_directory_and_other_profiles(tmp_path):
         profile = client.get("/participants/3")
         assert profile.status_code == 200
         assert "Влился в беседу" in profile.text and "История" in profile.text
-        assert "Сбор данных" not in profile.text and 'action="/consent"' not in profile.text
-        assert "Пока нет ачивок" in client.get("/participants/4").text
+        assert 'class="status status-on">Сбор включён' in profile.text
+        assert 'action="/consent"' not in profile.text
+        other = client.get("/participants/4")
+        assert "Пока нет ачивок" in other.text
+        assert 'class="status status-off">Сбор выключен' in other.text
         assert client.get("/participants/9").status_code == 404

@@ -55,6 +55,9 @@ def create_app(settings, store, lifespan=None):
         identity = user_id(request)
         return render_profile(request, identity, identity)
 
+    async def data_policy(request):
+        return templates.TemplateResponse(request, "data_policy.html")
+
     async def participants(request):
         viewer = user_id(request)
         headers = {"Cache-Control": "no-store"}
@@ -149,6 +152,7 @@ def create_app(settings, store, lifespan=None):
 
     app = Starlette(lifespan=lifespan, routes=[
         Route("/", profile), Route(AWARD_PATH, achievement), Route("/login", login),
+        Route("/data-policy", data_policy),
         Route("/participants", participants), Route("/participants/{identity:int}", participant_profile),
         Route("/auth/callback", callback),
         Route("/consent", consent, methods=["POST"]),

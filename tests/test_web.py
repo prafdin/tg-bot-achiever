@@ -46,6 +46,7 @@ def test_profile_and_consent(tmp_path, telegram_id):
         telegram.user = {"id": telegram_id}
         page = client.get("/auth/callback")
         assert "История" in page.text
+        assert 'href="/data-policy"' in page.text
         assert client.post("/consent", data={"enabled": "1"}).status_code == 403
         csrf = re.search(r'name="csrf" value="([^"]+)"', page.text)[1]
         assert 'class="status status-off"' in page.text
@@ -135,3 +136,15 @@ def test_participant_directory_and_other_profiles(tmp_path):
         assert "Пока нет ачивок" in other.text
         assert 'class="status status-off">Сбор выключен' in other.text
         assert client.get("/participants/9").status_code == 404
+
+
+def test_data_collection_policy_is_readable_without_login(tmp_path):
+    store = Store(tmp_path / "app.db")
+    config = SimpleNamespace(allowed_ids={2}, public_url="https://example.test",
+                             session_secret="test-secret", client_id="id", client_secret="secret")
+    with TestClient(create_app(config, store), base_url=config.public_url) as client:
+        policy = client.get("/data-policy", follow_redirects=False)
+        assert policy.status_code == 200
+        assert "Политика сбора данных" in policy.text
+        assert "идентификаторы чата, сообщения и отправителя" in policy.text
+        assert "ранее учтённые сообщения и выданные ачивки сохраняются" in policy.text

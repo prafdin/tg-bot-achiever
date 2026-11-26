@@ -41,6 +41,14 @@ class Telegram:
 
 
 def handle_update(update, settings, store, observation_started_at):
+    reaction = update.get("message_reaction")
+    if reaction:
+        actor = reaction.get("user")
+        if (settings.paused or reaction["chat"]["id"] != settings.chat_id
+                or reaction["date"] <= observation_started_at or not actor or actor.get("is_bot")
+                or not any(item not in reaction["old_reaction"] for item in reaction["new_reaction"])):
+            return False
+        return store.record_reaction(settings.chat_id, reaction["message_id"], actor["id"], reaction["date"])
     message = update.get("message")
     if settings.paused or not message or message["chat"]["id"] != settings.chat_id:
         return False
@@ -62,7 +70,7 @@ async def poll(settings, store, telegram):
         try:
             timeout = 0 if observation_started_at is None else 30
             updates = await telegram("getUpdates", offset=offset,
-                                     timeout=timeout, allowed_updates=["message"])
+                                     timeout=timeout, allowed_updates=["message", "message_reaction"])
             if observation_started_at is None:
                 # Open the observation window after the first successful API response.
                 observation_started_at = time.time()

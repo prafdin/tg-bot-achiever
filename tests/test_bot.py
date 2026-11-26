@@ -100,3 +100,47 @@ def test_reply_resets_silence_without_counting_towards_the_message_award(tmp_pat
     assert store.award_daily("2026-11-26", checked_at=86500) == 1
     assert store.profile(2) == (True, None)
     assert store.silence_history(2) == [(1, "2026-11-26")]
+
+
+def test_public_favorite_counts_distinct_consented_reactors(tmp_path):
+    store = Store(tmp_path / "app.db")
+    settings = SimpleNamespace(chat_id=1, paused=False, public_url="https://example.test")
+    for identity in (1, 2, 3, 4, 5, 6):
+        store.set_consent(identity, True, 11)
+    assert store.record_message(1, 50, 1, 12)
+    assert store.record_message(1, 51, 1, 12)
+
+    like = {"type": "emoji", "emoji": "👍"}
+    dislike = {"type": "emoji", "emoji": "👎"}
+
+    def react(identity, message=50, old=(), new=(like,), **extra):
+        event = {"chat": {"id": 1}, "message_id": message, "date": 20,
+                 "user": {"id": identity}, "old_reaction": old, "new_reaction": new} | extra
+        return handle_update({"message_reaction": event}, settings, store, 10)
+
+    assert not react(1)
+    assert not react(7)
+    assert not react(2, message=99)
+    assert not react(2, user=None, actor_chat={"id": 9})
+    assert not react(2, user={"id": 2, "is_bot": True})
+    assert not react(2, date=10)
+    assert react(2)
+    assert not react(2, new=(like, dislike))
+    assert not react(2, old=(like,), new=())
+    assert react(3, new=(dislike,))
+    assert react(4)
+    assert react(5, message=51)
+    assert store.award_daily("2026-11-26", checked_at=25) == 0
+    assert react(5)
+    store.set_consent(1, False, 21)
+    assert not react(6, date=22)
+    assert store.award_daily("2026-11-27", checked_at=25) == 0
+    store.set_consent(1, True, 26)
+    assert store.award_daily("2026-11-28", checked_at=27) == 1
+    assert store.reaction_award_day(1) == "2026-11-28"
+    day, groups = store.pending_digest()
+    assert day == "2026-11-28"
+    assert [(group.name, group.path, group.user_ids) for group in groups] == [
+        ("Любимец публики", "/achievements/public-favorite", [1])
+    ]
+    assert store.award_daily("2026-11-29", checked_at=28) == 0

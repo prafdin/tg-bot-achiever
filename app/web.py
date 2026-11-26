@@ -16,6 +16,7 @@ from starlette.templating import Jinja2Templates
 
 from app.store import (
     AWARD_MESSAGE_COUNT, AWARD_NAME, AWARD_PATH, AWARD_SLUG,
+    REACTION_AWARD_COUNT, REACTION_AWARD_NAME, REACTION_AWARD_PATH, REACTION_AWARD_SLUG,
     SERIES_BY_SLUG, SILENCE_BY_SLUG, SILENCE_TIERS,
 )
 
@@ -25,10 +26,14 @@ OAUTH_ERRORS = {"access_denied", "invalid_client", "invalid_grant", "invalid_req
 LEGACY_SILENCE_SLUG = "listed-as-alive"
 ACHIEVEMENT_PATHS = {
     AWARD_SLUG: AWARD_PATH,
+    REACTION_AWARD_SLUG: REACTION_AWARD_PATH,
     LEGACY_SILENCE_SLUG: SILENCE_TIERS[0].path,
     **{tier.slug: tier.path for tier in SILENCE_TIERS},
 }
-ACHIEVEMENT_NAMES = {AWARD_SLUG: AWARD_NAME, **{tier.slug: tier.name for tier in SILENCE_TIERS}}
+ACHIEVEMENT_NAMES = {
+    AWARD_SLUG: AWARD_NAME, REACTION_AWARD_SLUG: REACTION_AWARD_NAME,
+    **{tier.slug: tier.name for tier in SILENCE_TIERS},
+}
 
 
 def create_app(settings, store, lifespan=None):
@@ -63,6 +68,11 @@ def create_app(settings, store, lifespan=None):
             if day:
                 award = {"name": AWARD_NAME, "path": AWARD_PATH, "day": day,
                          "series_position": SERIES_BY_SLUG.get(AWARD_SLUG)}
+                current.append(award)
+                history.append(award)
+            reaction_day = store.reaction_award_day(identity)
+            if reaction_day:
+                award = {"name": REACTION_AWARD_NAME, "path": REACTION_AWARD_PATH, "day": reaction_day}
                 current.append(award)
                 history.append(award)
             silence_history = []
@@ -133,6 +143,9 @@ def create_app(settings, store, lifespan=None):
             unit = "сутки" if tier.days == 1 else "суток"
             detail = {"award_name": tier.name, "description": tier.description,
                       "criterion": f"За {tier.days} {unit} тишины после последнего замеченного сообщения"}
+        elif slug == REACTION_AWARD_SLUG:
+            detail = {"award_name": REACTION_AWARD_NAME, "description": "Класс!! Браво!!!",
+                      "criterion": f"За реакции {REACTION_AWARD_COUNT} разных участников на одно сообщение"}
         else:
             detail = {"award_name": AWARD_NAME, "description": "Продуктивность под угрозой",
                       "criterion": f"За {AWARD_MESSAGE_COUNT} учтённых сообщений",

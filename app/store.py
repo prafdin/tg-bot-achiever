@@ -9,6 +9,10 @@ AWARD_NAME = "Десяточка"
 AWARD_SLUG = "joined-the-conversation"
 AWARD_PATH = f"/achievements/{AWARD_SLUG}"
 AWARD_MESSAGE_COUNT = 10
+REACTION_AWARD_NAME = "Любимец публики"
+REACTION_AWARD_SLUG = "public-favorite"
+REACTION_AWARD_PATH = f"/achievements/{REACTION_AWARD_SLUG}"
+REACTION_AWARD_COUNT = 4
 SECONDS_PER_DAY = 86_400
 
 
@@ -91,6 +95,13 @@ class Store:
                     user_id INTEGER NOT NULL, tier INTEGER NOT NULL, day TEXT NOT NULL,
                     PRIMARY KEY (user_id, tier)
                 );
+                CREATE TABLE IF NOT EXISTS message_reactions (
+                    chat_id INTEGER NOT NULL, message_id INTEGER NOT NULL, reactor_id INTEGER NOT NULL,
+                    PRIMARY KEY (chat_id, message_id, reactor_id)
+                );
+                CREATE TABLE IF NOT EXISTS reaction_awards (
+                    user_id INTEGER PRIMARY KEY, day TEXT NOT NULL
+                );
             """)
             # Include regular messages recorded by older versions, even after a rollback.
             db.execute("""
@@ -132,6 +143,23 @@ class Store:
             """, (user_id, sent_at))
             return True
 
+    def record_reaction(self, chat_id, message_id, reactor_id, reacted_at):
+        with self.transaction() as db:
+            result = db.execute("""
+                INSERT OR IGNORE INTO message_reactions
+                SELECT message.chat_id, message.message_id, :reactor
+                FROM messages AS message
+                WHERE message.chat_id = :chat AND message.message_id = :message
+                  AND message.user_id != :reactor AND message.sent_at <= :time
+                  AND (SELECT enabled FROM consent
+                       WHERE user_id = :reactor AND changed_at <= :time
+                       ORDER BY changed_at DESC LIMIT 1) = 1
+                  AND (SELECT enabled FROM consent
+                       WHERE user_id = message.user_id AND changed_at <= :time
+                       ORDER BY changed_at DESC LIMIT 1) = 1
+            """, {"chat": chat_id, "message": message_id, "reactor": reactor_id, "time": reacted_at})
+            return result.rowcount == 1
+
     def award_daily(self, local_date, checked_at=None):
         if checked_at is None:
             checked_at = time.time()
@@ -152,6 +180,18 @@ class Store:
                    ) = 1
             """, (local_date, AWARD_MESSAGE_COUNT))
             awarded = result.rowcount + self._award_silence(db, local_date, checked_at)
+            reactions = db.execute("""
+                INSERT OR IGNORE INTO reaction_awards
+                SELECT DISTINCT message.user_id, ?
+                FROM (
+                    SELECT chat_id, message_id FROM message_reactions
+                    GROUP BY chat_id, message_id HAVING count(*) >= ?
+                ) AS qualified
+                JOIN messages AS message USING (chat_id, message_id)
+                WHERE (SELECT enabled FROM consent WHERE user_id = message.user_id
+                       ORDER BY changed_at DESC LIMIT 1) = 1
+            """, (local_date, REACTION_AWARD_COUNT))
+            awarded += reactions.rowcount
             if not awarded:
                 db.execute("UPDATE daily SET sent = 1 WHERE day = ?", (local_date,))
             return awarded
@@ -195,12 +235,19 @@ class Store:
                 ORDER BY tier
             """, (user_id, len(SILENCE_TIERS))).fetchall()
 
+    def reaction_award_day(self, user_id):
+        with self.transaction() as db:
+            row = db.execute("SELECT day FROM reaction_awards WHERE user_id = ?", (user_id,)).fetchone()
+            return row[0] if row else None
+
     def achievement_discovered(self, slug=AWARD_SLUG):
         with self.transaction() as db:
             if slug in SILENCE_BY_SLUG:
                 number, _ = SILENCE_BY_SLUG[slug]
                 return db.execute("SELECT 1 FROM silence_awards WHERE tier = ? LIMIT 1",
                                   (number,)).fetchone() is not None
+            if slug == REACTION_AWARD_SLUG:
+                return db.execute("SELECT 1 FROM reaction_awards LIMIT 1").fetchone() is not None
             return slug == AWARD_SLUG and db.execute("SELECT 1 FROM awards LIMIT 1").fetchone() is not None
 
     def pending_digest(self):
@@ -213,6 +260,11 @@ class Store:
                 "SELECT user_id FROM awards WHERE day = ? ORDER BY user_id", (day,),
             )]
             groups = [AwardBatch(AWARD_NAME, AWARD_PATH, users)] if users else []
+            reaction_users = [user_id for user_id, in db.execute(
+                "SELECT user_id FROM reaction_awards WHERE day = ? ORDER BY user_id", (day,),
+            )]
+            if reaction_users:
+                groups.append(AwardBatch(REACTION_AWARD_NAME, REACTION_AWARD_PATH, reaction_users))
             tiers = db.execute("""
                 SELECT tier, user_id FROM silence_awards
                 WHERE day = ? AND tier BETWEEN 1 AND ?

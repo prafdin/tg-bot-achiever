@@ -218,3 +218,31 @@ def test_first_silence_achievement_replaces_the_previous_drafts(tmp_path):
         assert profile.count(f'href="{first}">Ща придумаю</a>') == 2
         assert "Объявлен в розыск" not in profile
         assert "Числится живым" not in profile
+
+
+def test_public_favorite_profile_and_detail(tmp_path):
+    store = Store(tmp_path / "app.db")
+    config = SimpleNamespace(allowed_ids={2}, public_url="https://example.test",
+                             session_secret="test-secret", client_id="id", client_secret="secret")
+    app = create_app(config, store)
+
+    class Telegram:
+        async def authorize_access_token(self, request):
+            return {"userinfo": {"id": 2}}
+
+    app.state.telegram = Telegram()
+    path = "/achievements/public-favorite"
+    with TestClient(app, base_url=config.public_url) as client:
+        assert client.get("/auth/callback").status_code == 200
+        assert client.get(path).status_code == 404
+        for identity in range(2, 7):
+            store.set_consent(identity, True, 1)
+        assert store.record_message(1, 1, 2, 2)
+        for reactor in range(3, 7):
+            assert store.record_reaction(1, 1, reactor, 3)
+        assert store.award_daily("2026-11-26", checked_at=4) == 1
+        assert client.get("/").text.count(f'href="{path}">Любимец публики</a>') == 2
+        details = client.get(path)
+        assert details.status_code == 200 and "Класс!! Браво!!!" in details.text
+        assert "За реакции 4 разных участников на одно сообщение" in details.text
+        assert "<img" not in details.text

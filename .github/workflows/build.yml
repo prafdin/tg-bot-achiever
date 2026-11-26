@@ -44,3 +44,26 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+  publish:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: achiever-image
+      - name: Publish build for deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="build-$GITHUB_RUN_ID"
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" achiever-image.tar.gz --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --title "Build $GITHUB_RUN_ID" --prerelease --latest=false
+          fi
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[] | select(.name == "achiever-image.tar.gz") | .name' \
+            | grep -Fx achiever-image.tar.gz

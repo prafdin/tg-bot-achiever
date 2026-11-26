@@ -29,41 +29,36 @@ jobs:
         run: |
           python -m pip install '.[test]'
           python -m pytest -q
-      - name: Validate Compose and build image
-        run: |
-          docker compose config -q
-          docker build --tag "$IMAGE" .
-      - name: Export deployment image
-        if: github.ref == 'refs/heads/main'
-        run: docker save "$IMAGE" | gzip -1 > achiever-image.tar.gz
-      - uses: actions/upload-artifact@v7
-        if: github.ref == 'refs/heads/main'
-        with:
-          name: achiever-image
-          path: achiever-image.tar.gz
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
+      - name: Validate Compose
+        run: docker compose config -q
+      - name: Check Docker build
+        if: github.ref != 'refs/heads/main'
+        run: docker build --tag "$IMAGE" .
   publish:
     if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
-      contents: write
+      contents: read
+      packages: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@v6
         with:
-          name: achiever-image
-      - name: Publish build for deployment
+          persist-credentials: false
+      - name: Publish container image
         env:
-          GH_TOKEN: ${{ github.token }}
+          GHCR_TOKEN: ${{ github.token }}
         run: |
-          tag="build-$GITHUB_RUN_ID"
-          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$tag" achiever-image.tar.gz --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" --title "Build $GITHUB_RUN_ID" --prerelease --latest=false
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:build-$GITHUB_RUN_ID"
+          printf '%s\n' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          unset GHCR_TOKEN
+          if docker manifest inspect "$image" >/dev/null 2>&1; then
+            printf 'Image already published for run %s\n' "$GITHUB_RUN_ID"
+            exit 0
           fi
-          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets \
-            --jq '.assets[] | select(.name == "achiever-image.tar.gz") | .name' \
-            | grep -Fx achiever-image.tar.gz
+          docker build --tag "$image" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.version=build-$GITHUB_RUN_ID" .
+          docker push "$image"

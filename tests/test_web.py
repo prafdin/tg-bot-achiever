@@ -97,7 +97,7 @@ def test_achievement_deep_link_after_first_award(tmp_path):
 def test_participant_directory_and_other_profiles(tmp_path):
     store = Store(tmp_path / "app.db")
     config = SimpleNamespace(allowed_ids={2, 3, 4, 5}, public_url="https://example.test",
-                             participant_names={3: "Резервное имя", 4: "Вера", 9: "Нет доступа"},
+                             participant_names={2: "Аня", 3: "<Борис>", 4: "Вера", 9: "Нет доступа"},
                              session_secret="test-secret", client_id="id", client_secret="secret")
     app = create_app(config, store)
 
@@ -106,7 +106,7 @@ def test_participant_directory_and_other_profiles(tmp_path):
             return {"userinfo": {"id": 2}}
 
     async def resolve_name(identity):
-        return {2: "Аня", 3: "<Борис>"}.get(identity)
+        return {3: "Имя из Telegram", 5: "Другое имя из Telegram"}.get(identity)
 
     app.state.telegram = Telegram()
     app.state.resolve_member_name = resolve_name
@@ -124,7 +124,7 @@ def test_participant_directory_and_other_profiles(tmp_path):
         assert 'href="/participants/3"' in directory.text and "&lt;Борис&gt;" in directory.text
         assert 'href="/participants/4"' in directory.text and "Вера" in directory.text
         assert "Участник 5" in directory.text
-        assert "Резервное имя" not in directory.text and "Нет доступа" not in directory.text
+        assert "Имя из Telegram" not in directory.text and "Нет доступа" not in directory.text
         profile = client.get("/participants/3")
         assert profile.status_code == 200
         assert "Влился в беседу" in profile.text and "История" in profile.text

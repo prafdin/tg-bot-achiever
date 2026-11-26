@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import secrets
 import time
@@ -37,10 +36,8 @@ def create_app(settings, store, lifespan=None):
         value = request.session.get("user_id")
         return value if value in settings.allowed_ids else None
 
-    async def participant_name(request, identity):
-        resolver = getattr(request.app.state, "resolve_member_name", None)
-        name = await resolver(identity) if resolver else None
-        return name or participant_names.get(identity) or f"Участник {identity}"
+    def participant_name(identity):
+        return participant_names.get(identity, f"Участник {identity}")
 
     def render_profile(request, identity, viewer, name=None):
         own_profile = identity is not None and identity == viewer
@@ -63,9 +60,10 @@ def create_app(settings, store, lifespan=None):
         headers = {"Cache-Control": "no-store"}
         if viewer is None:
             return RedirectResponse("/login", status_code=303, headers=headers)
-        identities = sorted(settings.allowed_ids)
-        names = await asyncio.gather(*(participant_name(request, identity) for identity in identities))
-        members = sorted(zip(identities, names), key=lambda member: member[1].casefold())
+        members = sorted(
+            ((identity, participant_name(identity)) for identity in settings.allowed_ids),
+            key=lambda member: (member[1].casefold(), member[0]),
+        )
         return templates.TemplateResponse(request, "participants.html", {
             "members": members, "viewer": viewer,
         }, headers=headers)
@@ -80,7 +78,7 @@ def create_app(settings, store, lifespan=None):
             return PlainTextResponse("Участник не найден.", status_code=404, headers=headers)
         if identity == viewer:
             return RedirectResponse("/", status_code=303, headers=headers)
-        return render_profile(request, identity, viewer, await participant_name(request, identity))
+        return render_profile(request, identity, viewer, participant_name(identity))
 
     async def achievement(request):
         headers = {"Cache-Control": "no-store"}

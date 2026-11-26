@@ -138,12 +138,13 @@ def create_app(settings, store, lifespan=None):
                       "criterion": f"За {AWARD_MESSAGE_COUNT} учтённых сообщений"}
         position = SERIES_BY_SLUG.get(slug)
         if position:
-            steps = [
+            detail["series_position"] = position
+        if position and len(position.series.steps) > 1:
+            detail["series_steps"] = [
                 {"name": ACHIEVEMENT_NAMES[step], "path": ACHIEVEMENT_PATHS[step], "current": step == slug}
                 if store.achievement_discovered(step) else None
                 for step in position.series.steps
             ]
-            detail.update(series_position=position, series_steps=steps)
         return templates.TemplateResponse(request, "achievement.html", detail, headers=headers)
 
     async def login(request):

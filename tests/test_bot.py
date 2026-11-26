@@ -50,8 +50,8 @@ def test_daily_digest(tmp_path):
     payload = calls[0][1]
     assert payload["parse_mode"] == "HTML"
     assert '<a href="https://example.test/achievements/joined-the-conversation">Влился в беседу</a>' in payload["text"]
-    assert '<a href="https://example.test/achievements/not-in-touch">Не вышел на связь</a>' in payload["text"]
-    assert "Числится живым · 1 из 4" in payload["text"]
+    assert '<a href="https://example.test/achievements/not-in-touch">Ща придумаю</a>' in payload["text"]
+    assert "Числится живым" in payload["text"]
     assert "Имя &lt;&amp;&gt;" in payload["text"]
     assert "reply_markup" not in payload
 

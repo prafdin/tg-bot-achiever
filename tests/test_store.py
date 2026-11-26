@@ -1,6 +1,7 @@
 import sqlite3
 
-from app.store import Store
+import app.store as storage
+from app.store import SilenceTier, Store
 
 
 DAY = 86400
@@ -36,7 +37,11 @@ def test_award_and_consent(tmp_path):
     assert store.pending_digest() is None
 
 
-def test_silence_progress_survives_messages_and_restart(tmp_path):
+def test_silence_progress_survives_messages_and_restart(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "SILENCE_TIERS", tuple(
+        SilenceTier(days, f"Test tier {days}", f"test-{days}", "")
+        for days in (1, 7, 14, 30)
+    ))
     path = tmp_path / "app.db"
     store = Store(path)
     store.set_consent(2, True, 1)
@@ -94,5 +99,18 @@ def test_silence_uses_last_real_message_from_existing_database(tmp_path):
     with sqlite3.connect(path) as db:
         db.execute("INSERT INTO messages VALUES (1, 3, 2, ?)", (3 * DAY,))
     store = Store(path)
-    assert store.award_daily("2026-12-04", checked_at=10 * DAY - 1) == 0
-    assert store.award_daily("2026-12-05", checked_at=10 * DAY) == 1
+    with store.transaction() as db:
+        assert db.execute("SELECT sent_at FROM last_activity WHERE user_id=2").fetchone() == (3 * DAY,)
+    assert store.award_daily("2026-12-05", checked_at=40 * DAY) == 0
+
+
+def test_removed_silence_tiers_are_retained_but_not_displayed_or_sent(tmp_path):
+    store = Store(tmp_path / "app.db")
+    with store.transaction() as db:
+        db.execute("INSERT INTO silence_awards VALUES (2, 1, '2026-11-25'), (2, 2, '2026-11-26')")
+        db.execute("INSERT INTO daily VALUES ('2026-11-26', 0)")
+    assert store.silence_history(2) == [(1, "2026-11-25")]
+    assert store.pending_digest() == ("2026-11-26", [])
+    assert not store.achievement_discovered("wanted")
+    with store.transaction() as db:
+        assert db.execute("SELECT count(*) FROM silence_awards").fetchone() == (2,)

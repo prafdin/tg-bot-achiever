@@ -175,7 +175,7 @@ def test_site_favicon(tmp_path):
         assert icon.content.startswith(b"\x89PNG\r\n\x1a\n")
 
 
-def test_silence_achievements_have_independent_pages(tmp_path):
+def test_first_silence_achievement_replaces_the_previous_drafts(tmp_path):
     store = Store(tmp_path / "app.db")
     config = SimpleNamespace(allowed_ids={2}, public_url="https://example.test",
                              session_secret="test-secret", client_id="id", client_secret="secret")
@@ -197,35 +197,19 @@ def test_silence_achievements_have_independent_pages(tmp_path):
         store.set_consent(2, True, 1)
         assert store.record_message(1, 1, 2, 2)
         assert store.award_daily("2026-11-25", checked_at=86402) == 1
-        assert client.get(second).status_code == 404
-        assert store.award_daily("2026-12-01", checked_at=7 * 86400 + 2) == 1
-        assert store.record_message(1, 2, 2, 7 * 86400 + 3)
+        with store.transaction() as db:
+            db.execute("INSERT INTO silence_awards VALUES (2, 2, '2026-12-01')")
         client.cookies.clear()
-        page = client.get(second)
-        assert page.status_code == 200 and page.url.path == second
-        assert "<h1>Объявлен в розыск</h1>" in page.text
-        assert "За 7 суток тишины" in page.text and "Дежурный" not in page.text
-        first_page = client.get(first)
-        assert "Дежурный пока просит не волноваться" in first_page.text
-        assert "За 1 сутки тишины" in first_page.text and "За 7 суток тишины" not in first_page.text
-        assert "Числится живым · 1 из 4" in first_page.text
-        assert f'href="{second}">Объявлен в розыск</a>' in first_page.text
-        assert "Поиски приостановлены" not in first_page.text and "За 14 суток" not in first_page.text
-        assert 'href="/achievements/search-suspended"' not in first_page.text
-        assert first_page.text.count("Закрыта") == 2
+        page = client.get(first)
+        assert page.status_code == 200 and page.url.path == first
+        assert "<h1>Ща придумаю</h1>" in page.text
+        assert "Сутки думал, что написать в чат. Не придумал." in page.text
+        assert "За 1 сутки тишины" in page.text
+        assert "Ступени серии" not in page.text
+        assert "Числится живым" in page.text
         assert client.get("/achievements/listed-as-alive").url.path == first
-        assert client.get("/achievements/search-suspended").status_code == 404
+        for removed in (second, "/achievements/search-suspended", "/achievements/case-archived"):
+            assert client.get(removed).status_code == 404
         profile = client.get("/").text
-        current, history = profile.split("<h2>История</h2>")
-        assert f'href="{second}"' in current
-        assert "Объявлен в розыск" in current and "Не вышел на связь" not in current
-        assert "Числится живым · 2 из 4" in current
-        assert history.count("Получена ачивка") == 2
-        assert f'href="{first}"' in history and f'href="{second}"' in history
-        assert store.award_daily("2026-12-15", checked_at=21 * 86400 + 3) == 1
-        third = client.get("/achievements/search-suspended")
-        assert "<h1>Поиски приостановлены</h1>" in third.text and "За 14 суток тишины" in third.text
-        assert client.get("/achievements/case-archived").status_code == 404
-        assert store.award_daily("2026-12-31", checked_at=37 * 86400 + 3) == 1
-        fourth = client.get("/achievements/case-archived")
-        assert "<h1>Дело сдано в архив</h1>" in fourth.text and "За 30 суток тишины" in fourth.text
+        assert profile.count(f'href="{first}">Ща придумаю</a>') == 2
+        assert "Объявлен в розыск" not in profile

@@ -25,14 +25,8 @@ class SilenceTier:
 
 
 SILENCE_TIERS = (
-    SilenceTier(1, "Не вышел на связь", "not-in-touch",
-                "Сутки без сообщений. Дежурный пока просит не волноваться."),
-    SilenceTier(7, "Объявлен в розыск", "wanted",
-                "Неделя тишины. Свидетели сходятся на том, что когда-то ты здесь писал."),
-    SilenceTier(14, "Поиски приостановлены", "search-suspended",
-                "Две недели без связи. Признаков переписки не обнаружено."),
-    SilenceTier(30, "Дело сдано в архив", "case-archived",
-                "Месяц тишины. Если появишься, оформим как новое обстоятельство."),
+    SilenceTier(1, "Ща придумаю", "not-in-touch",
+                "Сутки думал, что написать в чат. Не придумал."),
 )
 SILENCE_BY_SLUG = {tier.slug: (number, tier) for number, tier in enumerate(SILENCE_TIERS, start=1)}
 
@@ -50,6 +44,8 @@ class SeriesPosition:
 
     @property
     def label(self):
+        if len(self.series.steps) == 1:
+            return self.series.name
         return f"{self.series.name} · {self.number} из {len(self.series.steps)}"
 
 
@@ -195,8 +191,11 @@ class Store:
 
     def silence_history(self, user_id):
         with self.transaction() as db:
-            return db.execute("SELECT tier, day FROM silence_awards WHERE user_id = ? ORDER BY tier",
-                              (user_id,)).fetchall()
+            return db.execute("""
+                SELECT tier, day FROM silence_awards
+                WHERE user_id = ? AND tier BETWEEN 1 AND ?
+                ORDER BY tier
+            """, (user_id, len(SILENCE_TIERS))).fetchall()
 
     def achievement_discovered(self, slug=AWARD_SLUG):
         with self.transaction() as db:
@@ -216,7 +215,11 @@ class Store:
                 "SELECT user_id FROM awards WHERE day = ? ORDER BY user_id", (day,),
             )]
             groups = [AwardBatch(AWARD_NAME, AWARD_PATH, users)] if users else []
-            tiers = db.execute("SELECT tier, user_id FROM silence_awards WHERE day = ? ORDER BY tier, user_id", (day,))
+            tiers = db.execute("""
+                SELECT tier, user_id FROM silence_awards
+                WHERE day = ? AND tier BETWEEN 1 AND ?
+                ORDER BY tier, user_id
+            """, (day, len(SILENCE_TIERS)))
             for tier, members in groupby(tiers, key=lambda row: row[0]):
                 achievement = SILENCE_TIERS[tier - 1]
                 groups.append(AwardBatch(achievement.name, achievement.path, [user_id for _, user_id in members],

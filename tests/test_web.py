@@ -92,6 +92,8 @@ def test_achievement_deep_link_after_first_award(tmp_path):
         assert page.status_code == 200
         assert page.url.path == path
         assert "За 10 учтённых сообщений" in page.text
+        assert 'src="https://storage.yandexcloud.net/achievements.prafdin.space/joined-the-conversation-cdn.webp"' in page.text
+        assert 'referrerpolicy="no-referrer"' in page.text
         assert client.get("/login?achievement=//example.org").url.path == "/"
 
 

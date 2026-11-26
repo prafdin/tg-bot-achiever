@@ -134,10 +134,20 @@ def create_app(settings, store, lifespan=None):
             return PlainTextResponse("Ачивка не найдена.", status_code=404, headers=headers)
         if slug == LEGACY_SILENCE_SLUG:
             return RedirectResponse(ACHIEVEMENT_PATHS[slug], status_code=303, headers=headers)
-        if user_id(request) is None:
+        viewer = user_id(request)
+        if viewer is None:
             return RedirectResponse(f"/login?achievement={slug}", status_code=303, headers=headers)
         if not store.achievement_discovered(slug):
             return PlainTextResponse("Ачивка не найдена.", status_code=404, headers=headers)
+        holders = [
+            {
+                "name": participant_name(identity),
+                "path": "/" if identity == viewer else f"/participants/{identity}",
+            }
+            for identity, _ in store.achievement_holders(slug)
+            if identity in settings.allowed_ids
+        ]
+        holders.sort(key=lambda holder: holder["name"].casefold())
         if slug in SILENCE_BY_SLUG:
             _, tier = SILENCE_BY_SLUG[slug]
             unit = "сутки" if tier.days == 1 else "суток"
@@ -151,6 +161,7 @@ def create_app(settings, store, lifespan=None):
                       "criterion": f"За {AWARD_MESSAGE_COUNT} учтённых сообщений",
                       "image_url": "https://storage.yandexcloud.net/achievements.prafdin.space/joined-the-conversation-cdn.webp"}
         position = SERIES_BY_SLUG.get(slug)
+        detail["holders"] = holders
         if position:
             detail["series_position"] = position
         if position and len(position.series.steps) > 1:

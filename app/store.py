@@ -240,6 +240,24 @@ class Store:
             row = db.execute("SELECT day FROM reaction_awards WHERE user_id = ?", (user_id,)).fetchone()
             return row[0] if row else None
 
+    def achievement_holders(self, slug):
+        with self.transaction() as db:
+            if slug in SILENCE_BY_SLUG:
+                tier, _ = SILENCE_BY_SLUG[slug]
+                return db.execute(
+                    "SELECT user_id, day FROM silence_awards WHERE tier = ? ORDER BY user_id",
+                    (tier,),
+                ).fetchall()
+            if slug == REACTION_AWARD_SLUG:
+                return db.execute(
+                    "SELECT user_id, day FROM reaction_awards ORDER BY user_id",
+                ).fetchall()
+            if slug == AWARD_SLUG:
+                return db.execute(
+                    "SELECT user_id, day FROM awards ORDER BY user_id",
+                ).fetchall()
+            return []
+
     def achievement_discovered(self, slug=AWARD_SLUG):
         with self.transaction() as db:
             if slug in SILENCE_BY_SLUG:

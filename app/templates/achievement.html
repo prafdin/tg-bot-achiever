@@ -23,6 +23,16 @@
     {% endif %}
     <p>{{ description }}</p>
     <p><strong>{{ criterion }}</strong></p>
+    {% if holders %}
+    <section>
+        <h2>Уже получили ачивку</h2>
+        <ul>
+            {% for holder in holders %}
+            <li><a href="{{ holder.path }}">{{ holder.name }}</a></li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
     {% if series_steps %}
     <section>
         <h2>Ступени серии</h2>

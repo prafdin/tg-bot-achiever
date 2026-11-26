@@ -49,9 +49,7 @@ class SeriesPosition:
         return f"{self.series.name} · {self.number} из {len(self.series.steps)}"
 
 
-ACHIEVEMENT_SERIES = (
-    AchievementSeries("Числится живым", tuple(tier.slug for tier in SILENCE_TIERS)),
-)
+ACHIEVEMENT_SERIES: tuple[AchievementSeries, ...] = ()
 SERIES_BY_SLUG = {
     slug: SeriesPosition(series, number)
     for series in ACHIEVEMENT_SERIES

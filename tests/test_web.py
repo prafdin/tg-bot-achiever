@@ -206,10 +206,11 @@ def test_first_silence_achievement_replaces_the_previous_drafts(tmp_path):
         assert "Сутки думал, что написать в чат. Не придумал." in page.text
         assert "За 1 сутки тишины" in page.text
         assert "Ступени серии" not in page.text
-        assert "Числится живым" in page.text
+        assert "Числится живым" not in page.text
         assert client.get("/achievements/listed-as-alive").url.path == first
         for removed in (second, "/achievements/search-suspended", "/achievements/case-archived"):
             assert client.get(removed).status_code == 404
         profile = client.get("/").text
         assert profile.count(f'href="{first}">Ща придумаю</a>') == 2
         assert "Объявлен в розыск" not in profile
+        assert "Числится живым" not in profile

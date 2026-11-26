@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tg-bot-achiever"
-version = "0.2.0"
+version = "0.2.1"
 requires-python = ">=3.10"
 dependencies = [
     "authlib==1.9.10",
@@ -24,4 +24,4 @@ test = ["pytest==9.2.0"]
 include = ["app*"]
 
 [tool.setuptools.package-data]
-app = ["templates/*.html"]
+app = ["templates/*.html", "static/*.png"]

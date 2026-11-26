@@ -160,3 +160,16 @@ def test_deployed_version_and_build_are_visible(tmp_path):
             page = client.get(path)
             assert "Версия 0.2.0" in page.text
             assert "Сборка 45804489232" in page.text
+
+
+def test_site_favicon(tmp_path):
+    store = Store(tmp_path / "app.db")
+    config = SimpleNamespace(allowed_ids={2}, public_url="https://example.test",
+                             session_secret="test-secret", client_id="id", client_secret="secret")
+    with TestClient(create_app(config, store), base_url=config.public_url) as client:
+        for route in ("/", "/data-policy"):
+            assert 'rel="icon" type="image/png" sizes="64x64" href="/favicon.png"' in client.get(route).text
+        icon = client.get("/favicon.png")
+        assert icon.status_code == 200
+        assert icon.headers["content-type"] == "image/png"
+        assert icon.content.startswith(b"\x89PNG\r\n\x1a\n")

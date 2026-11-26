@@ -10,7 +10,7 @@ from authlib.integrations.starlette_client import OAuth
 from joserfc.errors import JoseError
 from starlette.applications import Starlette
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.responses import PlainTextResponse, RedirectResponse
+from starlette.responses import FileResponse, PlainTextResponse, RedirectResponse
 from starlette.routing import Route
 from starlette.templating import Jinja2Templates
 
@@ -61,6 +61,9 @@ def create_app(settings, store, lifespan=None):
 
     async def data_policy(request):
         return templates.TemplateResponse(request, "data_policy.html")
+
+    async def favicon(request):
+        return FileResponse(Path(__file__).with_name("static") / "favicon.png", media_type="image/png")
 
     async def participants(request):
         viewer = user_id(request)
@@ -156,7 +159,7 @@ def create_app(settings, store, lifespan=None):
 
     app = Starlette(lifespan=lifespan, routes=[
         Route("/", profile), Route(AWARD_PATH, achievement), Route("/login", login),
-        Route("/data-policy", data_policy),
+        Route("/data-policy", data_policy), Route("/favicon.png", favicon),
         Route("/participants", participants), Route("/participants/{identity:int}", participant_profile),
         Route("/auth/callback", callback),
         Route("/consent", consent, methods=["POST"]),

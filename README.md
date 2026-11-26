@@ -15,14 +15,15 @@ achiever.example.org {
 }
 ```
 
-5. Скачайте артефакт `achiever-image` из успешного запуска GitHub Actions для ветки `main`. Распакуйте скачанный ZIP, перенесите `achiever-image.tar.gz` на ВМ и выполните команды в каталоге проекта.
+5. Возьмите ID успешной сборки ветки `main` и подставьте его вместо `RUN_ID`. Выполните команды в каталоге проекта на сервере.
 
 ```sh
-docker load --input achiever-image.tar.gz
+docker pull ghcr.io/prafdin/tg-bot-achiever:build-RUN_ID
+docker tag ghcr.io/prafdin/tg-bot-achiever:build-RUN_ID tg-bot-achiever-achiever:latest
 docker compose up -d --no-build
 ```
 
-SQLite находится в томе `achiever-data`. Для обновления загрузите новый артефакт и повторите эти команды.
+Образы публикуются в [GitHub Container Registry](https://github.com/users/prafdin/packages/container/package/tg-bot-achiever). SQLite находится в томе `achiever-data`.
 
 `AWARD_TIME` задаёт локальное время проверки, `AWARD_TIMEZONE` задаёт часовой пояс. При запуске после назначенного времени бот выполнит проверку за текущую дату, если она ещё не проводилась. Чтобы приостановить сбор, установите `COLLECTION_PAUSED=1` и примените конфигурацию через `docker compose up -d --no-build`.
 

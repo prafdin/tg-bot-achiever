@@ -23,6 +23,10 @@ OAUTH_ERRORS = {"access_denied", "invalid_client", "invalid_grant", "invalid_req
 
 def create_app(settings, store, lifespan=None):
     templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
+    templates.env.globals.update(
+        app_version=getattr(settings, "app_version", None),
+        build_run_id=getattr(settings, "build_run_id", ""),
+    )
     allowed_ids_by_text = {str(identity): identity for identity in settings.allowed_ids}
     participant_names = getattr(settings, "participant_names", {})
     oauth = OAuth()

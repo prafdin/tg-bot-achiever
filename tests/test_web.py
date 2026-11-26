@@ -148,3 +148,15 @@ def test_data_collection_policy_is_readable_without_login(tmp_path):
         assert "Политика сбора данных" in policy.text
         assert "идентификаторы чата, сообщения и отправителя" in policy.text
         assert "ранее учтённые сообщения и выданные ачивки сохраняются" in policy.text
+
+
+def test_deployed_version_and_build_are_visible(tmp_path):
+    store = Store(tmp_path / "app.db")
+    config = SimpleNamespace(allowed_ids={2}, public_url="https://example.test",
+                             session_secret="test-secret", client_id="id", client_secret="secret",
+                             app_version="0.2.0", build_run_id="45804489232")
+    with TestClient(create_app(config, store), base_url=config.public_url) as client:
+        for path in ("/", "/data-policy"):
+            page = client.get(path)
+            assert "Версия 0.2.0" in page.text
+            assert "Сборка 45804489232" in page.text

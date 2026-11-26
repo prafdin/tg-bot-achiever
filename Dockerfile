@@ -6,7 +6,8 @@ COPY app app
 RUN pip install --no-cache-dir . \
     && useradd --system --uid 10001 achiever \
     && install -d -o achiever /data
-ENV PYTHONUNBUFFERED=1 DATABASE_PATH=/data/achiever.db
+ARG ACHIEVER_BUILD_RUN_ID
+ENV PYTHONUNBUFFERED=1 DATABASE_PATH=/data/achiever.db ACHIEVER_BUILD_RUN_ID=${ACHIEVER_BUILD_RUN_ID}
 USER achiever
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log"]

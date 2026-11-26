@@ -58,6 +58,7 @@ jobs:
             exit 0
           fi
           docker build --tag "$image" \
+            --build-arg "ACHIEVER_BUILD_RUN_ID=$GITHUB_RUN_ID" \
             --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
             --label "org.opencontainers.image.revision=$GITHUB_SHA" \
             --label "org.opencontainers.image.version=build-$GITHUB_RUN_ID" .

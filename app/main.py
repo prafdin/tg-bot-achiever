@@ -4,6 +4,7 @@ import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import time
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
@@ -29,6 +30,8 @@ class Settings:
     database: Path
     timezone: ZoneInfo
     award_time: time
+    app_version: str | None
+    build_run_id: str
 
     @classmethod
     def from_env(cls):
@@ -54,6 +57,10 @@ class Settings:
             for key, name in names.items()
         ):
             raise ValueError("PARTICIPANT_NAMES должен быть JSON-объектом с числовыми ID и непустыми именами")
+        try:
+            app_version = version("tg-bot-achiever")
+        except PackageNotFoundError:
+            app_version = None
         return cls(
             bot_token=required("BOT_TOKEN"),
             client_id=required("TELEGRAM_CLIENT_ID"),
@@ -67,6 +74,8 @@ class Settings:
             database=Path(os.environ.get("DATABASE_PATH", "achiever.db")),
             timezone=ZoneInfo(os.environ.get("AWARD_TIMEZONE", "Europe/Samara")),
             award_time=award_time,
+            app_version=app_version,
+            build_run_id=os.environ.get("ACHIEVER_BUILD_RUN_ID", ""),
         )
 
 

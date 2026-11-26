@@ -1,0 +1,7 @@
+{% if app_version or build_run_id %}
+<footer style="margin-top: 2rem; color: #515863; font-size: .875rem;">
+    {% if app_version %}Версия {{ app_version }}{% endif %}
+    {% if app_version and build_run_id %} · {% endif %}
+    {% if build_run_id %}Сборка {{ build_run_id }}{% endif %}
+</footer>
+{% endif %}

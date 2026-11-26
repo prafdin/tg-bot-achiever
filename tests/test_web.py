@@ -151,7 +151,8 @@ def test_data_collection_policy_is_readable_without_login(tmp_path):
         assert policy.status_code == 200
         assert "Политика сбора данных" in policy.text
         assert "идентификаторы чата, сообщения и отправителя" in policy.text
-        assert "ранее учтённые сообщения и выданные ачивки сохраняются" in policy.text
+        assert "ранее учтённые сообщения и результаты подсчётов сохраняются" in policy.text
+        assert "ачивк" not in policy.text.lower()
 
 
 def test_deployed_version_and_build_are_visible(tmp_path):

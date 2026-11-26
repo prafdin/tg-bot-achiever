@@ -16,6 +16,7 @@ from starlette.templating import Jinja2Templates
 
 from app.store import (
     AWARD_MESSAGE_COUNT, AWARD_NAME, AWARD_PATH, AWARD_SLUG,
+    ELEPHANT_AWARD_LETTER_COUNT, ELEPHANT_AWARD_NAME, ELEPHANT_AWARD_PATH, ELEPHANT_AWARD_SLUG,
     REACTION_AWARD_COUNT, REACTION_AWARD_NAME, REACTION_AWARD_PATH, REACTION_AWARD_SLUG,
     SERIES_BY_SLUG, SILENCE_BY_SLUG, SILENCE_TIERS,
 )
@@ -27,11 +28,13 @@ LEGACY_SILENCE_SLUG = "listed-as-alive"
 ACHIEVEMENT_PATHS = {
     AWARD_SLUG: AWARD_PATH,
     REACTION_AWARD_SLUG: REACTION_AWARD_PATH,
+    ELEPHANT_AWARD_SLUG: ELEPHANT_AWARD_PATH,
     LEGACY_SILENCE_SLUG: SILENCE_TIERS[0].path,
     **{tier.slug: tier.path for tier in SILENCE_TIERS},
 }
 ACHIEVEMENT_NAMES = {
     AWARD_SLUG: AWARD_NAME, REACTION_AWARD_SLUG: REACTION_AWARD_NAME,
+    ELEPHANT_AWARD_SLUG: ELEPHANT_AWARD_NAME,
     **{tier.slug: tier.name for tier in SILENCE_TIERS},
 }
 
@@ -73,6 +76,11 @@ def create_app(settings, store, lifespan=None):
             reaction_day = store.reaction_award_day(identity)
             if reaction_day:
                 award = {"name": REACTION_AWARD_NAME, "path": REACTION_AWARD_PATH, "day": reaction_day}
+                current.append(award)
+                history.append(award)
+            elephant_day = store.elephant_award_day(identity)
+            if elephant_day:
+                award = {"name": ELEPHANT_AWARD_NAME, "path": ELEPHANT_AWARD_PATH, "day": elephant_day}
                 current.append(award)
                 history.append(award)
             silence_history = []
@@ -156,6 +164,12 @@ def create_app(settings, store, lifespan=None):
         elif slug == REACTION_AWARD_SLUG:
             detail = {"award_name": REACTION_AWARD_NAME, "description": "Класс!! Браво!!!",
                       "criterion": f"За реакции {REACTION_AWARD_COUNT} разных участников на одно сообщение"}
+        elif slug == ELEPHANT_AWARD_SLUG:
+            detail = {
+                "award_name": ELEPHANT_AWARD_NAME,
+                "description": "За продвижение политической повестки",
+                "criterion": f"За {ELEPHANT_AWARD_LETTER_COUNT} латинских букв z или v в обычных текстовых сообщениях",
+            }
         else:
             detail = {"award_name": AWARD_NAME, "description": "Продуктивность под угрозой",
                       "criterion": f"За {AWARD_MESSAGE_COUNT} учтённых сообщений",

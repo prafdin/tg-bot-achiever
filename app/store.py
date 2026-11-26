@@ -13,6 +13,10 @@ REACTION_AWARD_NAME = "Любимец публики"
 REACTION_AWARD_SLUG = "public-favorite"
 REACTION_AWARD_PATH = f"/achievements/{REACTION_AWARD_SLUG}"
 REACTION_AWARD_COUNT = 4
+ELEPHANT_AWARD_NAME = "Наш слон"
+ELEPHANT_AWARD_SLUG = "our-elephant"
+ELEPHANT_AWARD_PATH = f"/achievements/{ELEPHANT_AWARD_SLUG}"
+ELEPHANT_AWARD_LETTER_COUNT = 10
 SECONDS_PER_DAY = 86_400
 
 
@@ -102,6 +106,12 @@ class Store:
                 CREATE TABLE IF NOT EXISTS reaction_awards (
                     user_id INTEGER PRIMARY KEY, day TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS elephant_letter_counts (
+                    user_id INTEGER PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE TABLE IF NOT EXISTS elephant_awards (
+                    user_id INTEGER PRIMARY KEY, day TEXT NOT NULL
+                );
             """)
             # Include regular messages recorded by older versions, even after a rollback.
             db.execute("""
@@ -122,7 +132,8 @@ class Store:
             db.execute("INSERT OR REPLACE INTO consent VALUES (?, ?, ?)",
                        (user_id, changed_at, enabled))
 
-    def record_message(self, chat_id, message_id, user_id, sent_at, *, count_for_message_award=True):
+    def record_message(self, chat_id, message_id, user_id, sent_at, *, count_for_message_award=True,
+                       telegram_message=None):
         with self.transaction() as db:
             db.execute("BEGIN IMMEDIATE")
             consent = db.execute("""
@@ -136,6 +147,14 @@ class Store:
                 (chat_id, message_id, user_id, sent_at),
             ).rowcount:
                 return False
+            text = telegram_message.get("text") if telegram_message else None
+            text_letter_count = sum(text.count(letter) for letter in "zZvV") if isinstance(text, str) else 0
+            if text_letter_count:
+                db.execute("""
+                    INSERT INTO elephant_letter_counts VALUES (?, ?)
+                    ON CONFLICT(user_id) DO UPDATE
+                    SET count = elephant_letter_counts.count + excluded.count
+                """, (user_id, text_letter_count))
             db.execute("""
                 INSERT INTO last_activity VALUES (?, ?)
                 ON CONFLICT(user_id) DO UPDATE SET sent_at = excluded.sent_at
@@ -180,6 +199,15 @@ class Store:
                    ) = 1
             """, (local_date, AWARD_MESSAGE_COUNT))
             awarded = result.rowcount + self._award_silence(db, local_date, checked_at)
+            elephant = db.execute("""
+                INSERT OR IGNORE INTO elephant_awards
+                SELECT counts.user_id, ?
+                FROM elephant_letter_counts AS counts
+                WHERE counts.count >= ?
+                  AND (SELECT enabled FROM consent WHERE user_id = counts.user_id
+                       ORDER BY changed_at DESC LIMIT 1) = 1
+            """, (local_date, ELEPHANT_AWARD_LETTER_COUNT))
+            awarded += elephant.rowcount
             reactions = db.execute("""
                 INSERT OR IGNORE INTO reaction_awards
                 SELECT DISTINCT message.user_id, ?
@@ -240,6 +268,11 @@ class Store:
             row = db.execute("SELECT day FROM reaction_awards WHERE user_id = ?", (user_id,)).fetchone()
             return row[0] if row else None
 
+    def elephant_award_day(self, user_id):
+        with self.transaction() as db:
+            row = db.execute("SELECT day FROM elephant_awards WHERE user_id = ?", (user_id,)).fetchone()
+            return row[0] if row else None
+
     def achievement_holders(self, slug):
         with self.transaction() as db:
             if slug in SILENCE_BY_SLUG:
@@ -251,6 +284,10 @@ class Store:
             if slug == REACTION_AWARD_SLUG:
                 return db.execute(
                     "SELECT user_id, day FROM reaction_awards ORDER BY user_id",
+                ).fetchall()
+            if slug == ELEPHANT_AWARD_SLUG:
+                return db.execute(
+                    "SELECT user_id, day FROM elephant_awards ORDER BY user_id",
                 ).fetchall()
             if slug == AWARD_SLUG:
                 return db.execute(
@@ -266,6 +303,8 @@ class Store:
                                   (number,)).fetchone() is not None
             if slug == REACTION_AWARD_SLUG:
                 return db.execute("SELECT 1 FROM reaction_awards LIMIT 1").fetchone() is not None
+            if slug == ELEPHANT_AWARD_SLUG:
+                return db.execute("SELECT 1 FROM elephant_awards LIMIT 1").fetchone() is not None
             return slug == AWARD_SLUG and db.execute("SELECT 1 FROM awards LIMIT 1").fetchone() is not None
 
     def pending_digest(self):
@@ -283,6 +322,11 @@ class Store:
             )]
             if reaction_users:
                 groups.append(AwardBatch(REACTION_AWARD_NAME, REACTION_AWARD_PATH, reaction_users))
+            elephant_users = [user_id for user_id, in db.execute(
+                "SELECT user_id FROM elephant_awards WHERE day = ? ORDER BY user_id", (day,),
+            )]
+            if elephant_users:
+                groups.append(AwardBatch(ELEPHANT_AWARD_NAME, ELEPHANT_AWARD_PATH, elephant_users))
             tiers = db.execute("""
                 SELECT tier, user_id FROM silence_awards
                 WHERE day = ? AND tier BETWEEN 1 AND ?

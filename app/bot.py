@@ -60,6 +60,7 @@ def handle_update(update, settings, store, observation_started_at):
     return store.record_message(
         settings.chat_id, message["message_id"], sender["id"], message["date"],
         count_for_message_award=not REPLY_FIELDS.intersection(message),
+        telegram_message=message,
     )
 
 

@@ -56,7 +56,15 @@ class Store:
                 return 0
             result = db.execute("""
                 INSERT OR IGNORE INTO awards
-                SELECT user_id, ? FROM messages GROUP BY user_id HAVING count(*) >= ?
+                SELECT messages.user_id, ?
+                FROM messages
+                GROUP BY messages.user_id
+                HAVING count(*) >= ?
+                   AND (
+                       SELECT enabled FROM consent
+                       WHERE consent.user_id = messages.user_id
+                       ORDER BY changed_at DESC LIMIT 1
+                   ) = 1
             """, (local_date, AWARD_MESSAGE_COUNT))
             if not result.rowcount:
                 db.execute("UPDATE daily SET sent = 1 WHERE day = ?", (local_date,))

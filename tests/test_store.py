@@ -15,10 +15,15 @@ def test_award_and_consent(tmp_path):
     store.set_consent(2, False, 13)
     assert not store.record_message(1, 11, 2, 14)
     store = Store(path)
-    assert store.award_daily("2026-11-26") == 1
     assert store.award_daily("2026-11-26") == 0
-    assert store.award_daily("2026-11-27") == 0
-    assert store.profile(2) == (False, "2026-11-26")
-    assert store.pending_digest() == ("2026-11-26", [2])
-    store.mark_digest_sent("2026-11-26")
+    assert store.profile(2) == (False, None)
+    assert store.pending_digest() is None
+    store.set_consent(2, True, 15)
+    assert store.award_daily("2026-11-26") == 0
+    assert store.award_daily("2026-11-27") == 1
+    store.set_consent(2, False, 16)
+    assert store.award_daily("2026-11-28") == 0
+    assert store.profile(2) == (False, "2026-11-27")
+    assert store.pending_digest() == ("2026-11-27", [2])
+    store.mark_digest_sent("2026-11-27")
     assert store.pending_digest() is None

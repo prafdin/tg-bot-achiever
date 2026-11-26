@@ -12,6 +12,7 @@
         .status { border-radius: .4rem; padding: .4rem .65rem; display: inline-block; font-weight: 700; }
         .status-on { background: #dcfce7; color: #14532d; }
         .status-off { background: #fee2e2; color: #991b1b; }
+        .series-label { font-size: .875rem; color: #515863; }
     </style>
 </head>
 <body>
@@ -22,7 +23,9 @@
     <section>
         <h2>Актуальные ачивки</h2>
         {% for award in current %}
-        <p><a href="{{ award.path }}">{{ award.name }}</a></p>
+        <p><a href="{{ award.path }}">{{ award.name }}</a>
+            {% if award.series_position %}<br><span class="series-label">{{ award.series_position.label }}</span>{% endif %}
+        </p>
         {% else %}<p>Пока нет ачивок.</p>{% endfor %}
         <h2>История</h2>
         {% for award in history %}

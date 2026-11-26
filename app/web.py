@@ -16,7 +16,7 @@ from starlette.templating import Jinja2Templates
 
 from app.store import (
     AWARD_MESSAGE_COUNT, AWARD_NAME, AWARD_PATH, AWARD_SLUG,
-    SILENCE_BY_SLUG, SILENCE_TIERS,
+    SERIES_BY_SLUG, SILENCE_BY_SLUG, SILENCE_TIERS,
 )
 
 
@@ -28,6 +28,7 @@ ACHIEVEMENT_PATHS = {
     LEGACY_SILENCE_SLUG: SILENCE_TIERS[0].path,
     **{tier.slug: tier.path for tier in SILENCE_TIERS},
 }
+ACHIEVEMENT_NAMES = {AWARD_SLUG: AWARD_NAME, **{tier.slug: tier.name for tier in SILENCE_TIERS}}
 
 
 def create_app(settings, store, lifespan=None):
@@ -60,13 +61,17 @@ def create_app(settings, store, lifespan=None):
             current = []
             history = []
             if day:
-                award = {"name": AWARD_NAME, "path": AWARD_PATH, "day": day}
+                award = {"name": AWARD_NAME, "path": AWARD_PATH, "day": day,
+                         "series_position": SERIES_BY_SLUG.get(AWARD_SLUG)}
                 current.append(award)
                 history.append(award)
-            silence_history = [
-                {"name": SILENCE_TIERS[tier - 1].name, "path": SILENCE_TIERS[tier - 1].path, "day": awarded_day}
-                for tier, awarded_day in store.silence_history(identity)
-            ]
+            silence_history = []
+            for tier, awarded_day in store.silence_history(identity):
+                achievement = SILENCE_TIERS[tier - 1]
+                silence_history.append({
+                    "name": achievement.name, "path": achievement.path, "day": awarded_day,
+                    "series_position": SERIES_BY_SLUG.get(achievement.slug),
+                })
             if silence_history:
                 current.append(silence_history[-1])
                 history.extend(silence_history)
@@ -131,6 +136,14 @@ def create_app(settings, store, lifespan=None):
         else:
             detail = {"award_name": AWARD_NAME, "description": "Зашёл на минутку, а теперь без тебя уже не договорят.",
                       "criterion": f"За {AWARD_MESSAGE_COUNT} учтённых сообщений"}
+        position = SERIES_BY_SLUG.get(slug)
+        if position:
+            steps = [
+                {"name": ACHIEVEMENT_NAMES[step], "path": ACHIEVEMENT_PATHS[step], "current": step == slug}
+                if store.achievement_discovered(step) else None
+                for step in position.series.steps
+            ]
+            detail.update(series_position=position, series_steps=steps)
         return templates.TemplateResponse(request, "achievement.html", detail, headers=headers)
 
     async def login(request):

@@ -38,10 +38,37 @@ SILENCE_BY_SLUG = {tier.slug: (number, tier) for number, tier in enumerate(SILEN
 
 
 @dataclass(frozen=True)
+class AchievementSeries:
+    name: str
+    steps: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SeriesPosition:
+    series: AchievementSeries
+    number: int
+
+    @property
+    def label(self):
+        return f"{self.series.name} · {self.number} из {len(self.series.steps)}"
+
+
+ACHIEVEMENT_SERIES = (
+    AchievementSeries("Числится живым", tuple(tier.slug for tier in SILENCE_TIERS)),
+)
+SERIES_BY_SLUG = {
+    slug: SeriesPosition(series, number)
+    for series in ACHIEVEMENT_SERIES
+    for number, slug in enumerate(series.steps, start=1)
+}
+
+
+@dataclass(frozen=True)
 class AwardBatch:
     name: str
     path: str
     user_ids: list[int]
+    series_position: SeriesPosition | None = None
 
 
 class Store:
@@ -192,7 +219,8 @@ class Store:
             tiers = db.execute("SELECT tier, user_id FROM silence_awards WHERE day = ? ORDER BY tier, user_id", (day,))
             for tier, members in groupby(tiers, key=lambda row: row[0]):
                 achievement = SILENCE_TIERS[tier - 1]
-                groups.append(AwardBatch(achievement.name, achievement.path, [user_id for _, user_id in members]))
+                groups.append(AwardBatch(achievement.name, achievement.path, [user_id for _, user_id in members],
+                                         SERIES_BY_SLUG.get(achievement.slug)))
             return day, groups
 
     def mark_digest_sent(self, local_date):

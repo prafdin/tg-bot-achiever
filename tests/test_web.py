@@ -207,13 +207,19 @@ def test_silence_achievements_have_independent_pages(tmp_path):
         assert "За 7 суток тишины" in page.text and "Дежурный" not in page.text
         first_page = client.get(first)
         assert "Дежурный пока просит не волноваться" in first_page.text
-        assert "За 1 сутки тишины" in first_page.text and "Объявлен в розыск" not in first_page.text
+        assert "За 1 сутки тишины" in first_page.text and "За 7 суток тишины" not in first_page.text
+        assert "Числится живым · 1 из 4" in first_page.text
+        assert f'href="{second}">Объявлен в розыск</a>' in first_page.text
+        assert "Поиски приостановлены" not in first_page.text and "За 14 суток" not in first_page.text
+        assert 'href="/achievements/search-suspended"' not in first_page.text
+        assert first_page.text.count("Закрыта") == 2
         assert client.get("/achievements/listed-as-alive").url.path == first
         assert client.get("/achievements/search-suspended").status_code == 404
         profile = client.get("/").text
         current, history = profile.split("<h2>История</h2>")
         assert f'href="{second}"' in current
         assert "Объявлен в розыск" in current and "Не вышел на связь" not in current
+        assert "Числится живым · 2 из 4" in current
         assert history.count("Получена ачивка") == 2
         assert f'href="{first}"' in history and f'href="{second}"' in history
         assert store.award_daily("2026-12-15", checked_at=21 * 86400 + 3) == 1

@@ -134,7 +134,7 @@ def create_app(settings, store, lifespan=None):
             detail = {"award_name": tier.name, "description": tier.description,
                       "criterion": f"За {tier.days} {unit} тишины после последнего замеченного сообщения"}
         else:
-            detail = {"award_name": AWARD_NAME, "description": "Зашёл на минутку, а теперь без тебя уже не договорят.",
+            detail = {"award_name": AWARD_NAME, "description": "Продуктивность под угрозой",
                       "criterion": f"За {AWARD_MESSAGE_COUNT} учтённых сообщений",
                       "image_url": "https://storage.yandexcloud.net/achievements.prafdin.space/joined-the-conversation-cdn.webp"}
         position = SERIES_BY_SLUG.get(slug)

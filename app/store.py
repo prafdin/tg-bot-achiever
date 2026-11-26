@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from itertools import groupby
 
 
-AWARD_NAME = "Влился в беседу"
+AWARD_NAME = "Десяточка"
 AWARD_SLUG = "joined-the-conversation"
 AWARD_PATH = f"/achievements/{AWARD_SLUG}"
 AWARD_MESSAGE_COUNT = 10

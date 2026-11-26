@@ -59,7 +59,7 @@ def test_profile_and_consent(tmp_path, telegram_id):
             assert store.record_message(1, message_id, 2, int(time.time()) + 1)
         assert store.award_daily("2026-11-25", checked_at=time.time()) == 1
         page = client.get("/")
-        assert "Влился в беседу" in page.text
+        assert "Десяточка" in page.text
         assert page.text.count('href="/achievements/joined-the-conversation"') == 2
         assert '<time datetime="2026-11-25">' in page.text
 
@@ -91,6 +91,8 @@ def test_achievement_deep_link_after_first_award(tmp_path):
         page = client.get(path)
         assert page.status_code == 200
         assert page.url.path == path
+        assert "<h1>Десяточка</h1>" in page.text
+        assert "Продуктивность под угрозой" in page.text
         assert "За 10 учтённых сообщений" in page.text
         assert 'src="https://storage.yandexcloud.net/achievements.prafdin.space/joined-the-conversation-cdn.webp"' in page.text
         assert 'referrerpolicy="no-referrer"' in page.text
@@ -130,7 +132,7 @@ def test_participant_directory_and_other_profiles(tmp_path):
         assert "Имя из Telegram" not in directory.text and "Нет доступа" not in directory.text
         profile = client.get("/participants/3")
         assert profile.status_code == 200
-        assert "Влился в беседу" in profile.text and "История" in profile.text
+        assert "Десяточка" in profile.text and "История" in profile.text
         assert 'class="status status-on">Сбор включён' in profile.text
         assert 'action="/consent"' not in profile.text
         other = client.get("/participants/4")

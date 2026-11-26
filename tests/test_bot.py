@@ -49,7 +49,7 @@ def test_daily_digest(tmp_path):
     assert calls[0][0] == "sendMessage"
     payload = calls[0][1]
     assert payload["parse_mode"] == "HTML"
-    assert '<a href="https://example.test/achievements/joined-the-conversation">Влился в беседу</a>' in payload["text"]
+    assert '<a href="https://example.test/achievements/joined-the-conversation">Десяточка</a>' in payload["text"]
     assert '<a href="https://example.test/achievements/not-in-touch">Ща придумаю</a>' in payload["text"]
     assert "Числится живым" not in payload["text"]
     assert "Имя &lt;&amp;&gt;" in payload["text"]
@@ -74,7 +74,7 @@ def test_digest_survives_failed_delivery(tmp_path):
     assert store.profile(2)[1] == "2026-11-25"
     day, groups = store.pending_digest()
     assert day == "2026-11-25"
-    assert [(group.name, group.user_ids) for group in groups] == [("Влился в беседу", [2])]
+    assert [(group.name, group.user_ids) for group in groups] == [("Десяточка", [2])]
 
     async def available(method, **data):
         if method == "getChatMember":

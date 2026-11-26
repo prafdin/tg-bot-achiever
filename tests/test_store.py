@@ -32,7 +32,7 @@ def test_award_and_consent(tmp_path):
     assert store.profile(2) == (False, "2026-11-27")
     day, groups = store.pending_digest()
     assert day == "2026-11-27"
-    assert [(group.name, group.user_ids) for group in groups] == [("Влился в беседу", [2])]
+    assert [(group.name, group.user_ids) for group in groups] == [("Десяточка", [2])]
     store.mark_digest_sent("2026-11-27")
     assert store.pending_digest() is None
 

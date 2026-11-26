@@ -106,8 +106,7 @@ async def digest_text(settings, telegram, day, groups):
     headings = []
     for group in groups:
         url = escape(settings.public_url + group.path)
-        tier = f" · {escape(group.tier_name)}" if group.tier_name else ""
-        headings.append(f'🏅 «<a href="{url}">{escape(group.name)}</a>»{tier} · {day}')
+        headings.append(f'🏅 «<a href="{url}">{escape(group.name)}</a>» · {day}')
 
     size = sum(len(heading) + 2 for heading in headings)
     names = {}

@@ -16,13 +16,18 @@ from starlette.templating import Jinja2Templates
 
 from app.store import (
     AWARD_MESSAGE_COUNT, AWARD_NAME, AWARD_PATH, AWARD_SLUG,
-    SILENCE_NAME, SILENCE_PATH, SILENCE_SLUG, SILENCE_TIERS,
+    SILENCE_BY_SLUG, SILENCE_TIERS,
 )
 
 
 LOGGER = logging.getLogger(__name__)
 OAUTH_ERRORS = {"access_denied", "invalid_client", "invalid_grant", "invalid_request", "unauthorized_client"}
-ACHIEVEMENT_PATHS = {AWARD_SLUG: AWARD_PATH, SILENCE_SLUG: SILENCE_PATH}
+LEGACY_SILENCE_SLUG = "listed-as-alive"
+ACHIEVEMENT_PATHS = {
+    AWARD_SLUG: AWARD_PATH,
+    LEGACY_SILENCE_SLUG: SILENCE_TIERS[0].path,
+    **{tier.slug: tier.path for tier in SILENCE_TIERS},
+}
 
 
 def create_app(settings, store, lifespan=None):
@@ -55,14 +60,11 @@ def create_app(settings, store, lifespan=None):
             current = []
             history = []
             if day:
-                award = {"name": AWARD_NAME, "path": AWARD_PATH, "day": day,
-                         "action": "Получена ачивка"}
+                award = {"name": AWARD_NAME, "path": AWARD_PATH, "day": day}
                 current.append(award)
                 history.append(award)
             silence_history = [
-                {"name": SILENCE_NAME, "path": SILENCE_PATH, "day": awarded_day,
-                 "action": "Получена ачивка" if tier == 1 else "Повышен тир",
-                 "tier": SILENCE_TIERS[tier - 1].name}
+                {"name": SILENCE_TIERS[tier - 1].name, "path": SILENCE_TIERS[tier - 1].path, "day": awarded_day}
                 for tier, awarded_day in store.silence_history(identity)
             ]
             if silence_history:
@@ -115,15 +117,21 @@ def create_app(settings, store, lifespan=None):
         slug = request.path_params["slug"]
         if slug not in ACHIEVEMENT_PATHS:
             return PlainTextResponse("Ачивка не найдена.", status_code=404, headers=headers)
+        if slug == LEGACY_SILENCE_SLUG:
+            return RedirectResponse(ACHIEVEMENT_PATHS[slug], status_code=303, headers=headers)
         if user_id(request) is None:
             return RedirectResponse(f"/login?achievement={slug}", status_code=303, headers=headers)
         if not store.achievement_discovered(slug):
             return PlainTextResponse("Ачивка не найдена.", status_code=404, headers=headers)
-        description = {"award_name": SILENCE_NAME, "tiers": SILENCE_TIERS} if slug == SILENCE_SLUG else {
-            "award_name": AWARD_NAME,
-            "message_count": AWARD_MESSAGE_COUNT,
-        }
-        return templates.TemplateResponse(request, "achievement.html", description, headers=headers)
+        if slug in SILENCE_BY_SLUG:
+            _, tier = SILENCE_BY_SLUG[slug]
+            unit = "сутки" if tier.days == 1 else "суток"
+            detail = {"award_name": tier.name, "description": tier.description,
+                      "criterion": f"За {tier.days} {unit} тишины после последнего замеченного сообщения"}
+        else:
+            detail = {"award_name": AWARD_NAME, "description": "Зашёл на минутку, а теперь без тебя уже не договорят.",
+                      "criterion": f"За {AWARD_MESSAGE_COUNT} учтённых сообщений"}
+        return templates.TemplateResponse(request, "achievement.html", detail, headers=headers)
 
     async def login(request):
         request.session.clear()

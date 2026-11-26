@@ -9,9 +9,6 @@ AWARD_NAME = "Влился в беседу"
 AWARD_SLUG = "joined-the-conversation"
 AWARD_PATH = f"/achievements/{AWARD_SLUG}"
 AWARD_MESSAGE_COUNT = 10
-SILENCE_NAME = "Числится живым"
-SILENCE_SLUG = "listed-as-alive"
-SILENCE_PATH = f"/achievements/{SILENCE_SLUG}"
 SECONDS_PER_DAY = 86_400
 
 
@@ -19,15 +16,25 @@ SECONDS_PER_DAY = 86_400
 class SilenceTier:
     days: int
     name: str
+    slug: str
     description: str
+
+    @property
+    def path(self):
+        return f"/achievements/{self.slug}"
 
 
 SILENCE_TIERS = (
-    SilenceTier(1, "Не вышел на связь", "Сутки без сообщений. Дежурный пока просит не волноваться."),
-    SilenceTier(7, "Объявлен в розыск", "Неделя тишины. Свидетели сходятся на том, что когда-то ты здесь писал."),
-    SilenceTier(14, "Поиски приостановлены", "Две недели без связи. Признаков переписки не обнаружено."),
-    SilenceTier(30, "Дело сдано в архив", "Месяц тишины. Если появишься, оформим как новое обстоятельство."),
+    SilenceTier(1, "Не вышел на связь", "not-in-touch",
+                "Сутки без сообщений. Дежурный пока просит не волноваться."),
+    SilenceTier(7, "Объявлен в розыск", "wanted",
+                "Неделя тишины. Свидетели сходятся на том, что когда-то ты здесь писал."),
+    SilenceTier(14, "Поиски приостановлены", "search-suspended",
+                "Две недели без связи. Признаков переписки не обнаружено."),
+    SilenceTier(30, "Дело сдано в архив", "case-archived",
+                "Месяц тишины. Если появишься, оформим как новое обстоятельство."),
 )
+SILENCE_BY_SLUG = {tier.slug: (number, tier) for number, tier in enumerate(SILENCE_TIERS, start=1)}
 
 
 @dataclass(frozen=True)
@@ -35,7 +42,6 @@ class AwardBatch:
     name: str
     path: str
     user_ids: list[int]
-    tier_name: str | None = None
 
 
 class Store:
@@ -167,8 +173,10 @@ class Store:
 
     def achievement_discovered(self, slug=AWARD_SLUG):
         with self.transaction() as db:
-            if slug == SILENCE_SLUG:
-                return db.execute("SELECT 1 FROM silence_awards LIMIT 1").fetchone() is not None
+            if slug in SILENCE_BY_SLUG:
+                number, _ = SILENCE_BY_SLUG[slug]
+                return db.execute("SELECT 1 FROM silence_awards WHERE tier = ? LIMIT 1",
+                                  (number,)).fetchone() is not None
             return slug == AWARD_SLUG and db.execute("SELECT 1 FROM awards LIMIT 1").fetchone() is not None
 
     def pending_digest(self):
@@ -183,8 +191,8 @@ class Store:
             groups = [AwardBatch(AWARD_NAME, AWARD_PATH, users)] if users else []
             tiers = db.execute("SELECT tier, user_id FROM silence_awards WHERE day = ? ORDER BY tier, user_id", (day,))
             for tier, members in groupby(tiers, key=lambda row: row[0]):
-                groups.append(AwardBatch(SILENCE_NAME, SILENCE_PATH,
-                                         [user_id for _, user_id in members], SILENCE_TIERS[tier - 1].name))
+                achievement = SILENCE_TIERS[tier - 1]
+                groups.append(AwardBatch(achievement.name, achievement.path, [user_id for _, user_id in members]))
             return day, groups
 
     def mark_digest_sent(self, local_date):

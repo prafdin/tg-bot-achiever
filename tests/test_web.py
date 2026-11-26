@@ -175,7 +175,7 @@ def test_site_favicon(tmp_path):
         assert icon.content.startswith(b"\x89PNG\r\n\x1a\n")
 
 
-def test_silence_achievement_page_and_highest_tier(tmp_path):
+def test_silence_achievements_have_independent_pages(tmp_path):
     store = Store(tmp_path / "app.db")
     config = SimpleNamespace(allowed_ids={2}, public_url="https://example.test",
                              session_secret="test-secret", client_id="id", client_secret="secret")
@@ -189,22 +189,37 @@ def test_silence_achievement_page_and_highest_tier(tmp_path):
             return {"userinfo": {"id": 2}}
 
     app.state.telegram = Telegram()
-    path = "/achievements/listed-as-alive"
+    first = "/achievements/not-in-touch"
+    second = "/achievements/wanted"
     with TestClient(app, base_url=config.public_url) as client:
         assert client.get("/auth/callback").status_code == 200
-        assert client.get(path).status_code == 404
+        assert client.get(first).status_code == 404
         store.set_consent(2, True, 1)
         assert store.record_message(1, 1, 2, 2)
         assert store.award_daily("2026-11-25", checked_at=86402) == 1
+        assert client.get(second).status_code == 404
         assert store.award_daily("2026-12-01", checked_at=7 * 86400 + 2) == 1
         assert store.record_message(1, 2, 2, 7 * 86400 + 3)
         client.cookies.clear()
-        page = client.get(path)
-        assert page.status_code == 200 and page.url.path == path
-        for threshold in ("1 сутки", "7 суток", "14 суток", "30 суток"):
-            assert threshold in page.text
+        page = client.get(second)
+        assert page.status_code == 200 and page.url.path == second
+        assert "<h1>Объявлен в розыск</h1>" in page.text
+        assert "За 7 суток тишины" in page.text and "Дежурный" not in page.text
+        first_page = client.get(first)
+        assert "Дежурный пока просит не волноваться" in first_page.text
+        assert "За 1 сутки тишины" in first_page.text and "Объявлен в розыск" not in first_page.text
+        assert client.get("/achievements/listed-as-alive").url.path == first
+        assert client.get("/achievements/search-suspended").status_code == 404
         profile = client.get("/").text
         current, history = profile.split("<h2>История</h2>")
-        assert f'href="{path}"' in current
+        assert f'href="{second}"' in current
         assert "Объявлен в розыск" in current and "Не вышел на связь" not in current
-        assert "Повышен тир" in history and "Не вышел на связь" in history
+        assert history.count("Получена ачивка") == 2
+        assert f'href="{first}"' in history and f'href="{second}"' in history
+        assert store.award_daily("2026-12-15", checked_at=21 * 86400 + 3) == 1
+        third = client.get("/achievements/search-suspended")
+        assert "<h1>Поиски приостановлены</h1>" in third.text and "За 14 суток тишины" in third.text
+        assert client.get("/achievements/case-archived").status_code == 404
+        assert store.award_daily("2026-12-31", checked_at=37 * 86400 + 3) == 1
+        fourth = client.get("/achievements/case-archived")
+        assert "<h1>Дело сдано в архив</h1>" in fourth.text and "За 30 суток тишины" in fourth.text

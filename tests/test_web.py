@@ -57,7 +57,7 @@ def test_profile_and_consent(tmp_path, telegram_id):
         assert not store.profile(9)[0]
         for message_id in range(10):
             assert store.record_message(1, message_id, 2, int(time.time()) + 1)
-        assert store.award_daily("2026-11-25") == 1
+        assert store.award_daily("2026-11-25", checked_at=time.time()) == 1
         page = client.get("/")
         assert "Влился в беседу" in page.text
         assert page.text.count('href="/achievements/joined-the-conversation"') == 2
@@ -85,7 +85,7 @@ def test_achievement_deep_link_after_first_award(tmp_path):
         store.set_consent(2, True, 1)
         for message_id in range(10):
             assert store.record_message(1, message_id, 2, 2)
-        assert store.award_daily("2026-11-25") == 1
+        assert store.award_daily("2026-11-25", checked_at=2) == 1
         client.cookies.clear()
         assert client.get(path, follow_redirects=False).status_code == 303
         page = client.get(path)
@@ -114,7 +114,7 @@ def test_participant_directory_and_other_profiles(tmp_path):
     store.set_consent(3, True, 1)
     for message_id in range(10):
         assert store.record_message(1, message_id, 3, 2)
-    assert store.award_daily("2026-11-25") == 1
+    assert store.award_daily("2026-11-25", checked_at=2) == 1
 
     with TestClient(app, base_url=config.public_url) as client:
         assert client.get("/participants", follow_redirects=False).headers["location"] == "/login"
@@ -173,3 +173,38 @@ def test_site_favicon(tmp_path):
         assert icon.status_code == 200
         assert icon.headers["content-type"] == "image/png"
         assert icon.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_silence_achievement_page_and_highest_tier(tmp_path):
+    store = Store(tmp_path / "app.db")
+    config = SimpleNamespace(allowed_ids={2}, public_url="https://example.test",
+                             session_secret="test-secret", client_id="id", client_secret="secret")
+    app = create_app(config, store)
+
+    class Telegram:
+        async def authorize_redirect(self, request, redirect_uri):
+            return RedirectResponse("/auth/callback")
+
+        async def authorize_access_token(self, request):
+            return {"userinfo": {"id": 2}}
+
+    app.state.telegram = Telegram()
+    path = "/achievements/listed-as-alive"
+    with TestClient(app, base_url=config.public_url) as client:
+        assert client.get("/auth/callback").status_code == 200
+        assert client.get(path).status_code == 404
+        store.set_consent(2, True, 1)
+        assert store.record_message(1, 1, 2, 2)
+        assert store.award_daily("2026-11-25", checked_at=86402) == 1
+        assert store.award_daily("2026-12-01", checked_at=7 * 86400 + 2) == 1
+        assert store.record_message(1, 2, 2, 7 * 86400 + 3)
+        client.cookies.clear()
+        page = client.get(path)
+        assert page.status_code == 200 and page.url.path == path
+        for threshold in ("1 сутки", "7 суток", "14 суток", "30 суток"):
+            assert threshold in page.text
+        profile = client.get("/").text
+        current, history = profile.split("<h2>История</h2>")
+        assert f'href="{path}"' in current
+        assert "Объявлен в розыск" in current and "Не вышел на связь" not in current
+        assert "Повышен тир" in history and "Не вышел на связь" in history

@@ -13,8 +13,20 @@
 <main>
     <a href="/">Мой профиль</a>
     <h1>{{ award_name }}</h1>
+    {% if tiers %}
+    <p>Тиры за полные сутки без сообщений после последнего замеченного сообщения. Ответ тоже прерывает тишину.</p>
+    <ul>
+        {% for tier in tiers %}
+        <li>
+            <strong>{{ tier.days }} {{ "сутки" if tier.days == 1 else "суток" }} · {{ tier.name }}</strong>
+            <p>{{ tier.description }}</p>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
     <p>Зашёл на минутку, а теперь без тебя уже не договорят.</p>
     <p><strong>За {{ message_count }} учтённых сообщений</strong></p>
+    {% endif %}
 </main>
 {% include "build_info.html" %}
 </body>

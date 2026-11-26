@@ -7,8 +7,6 @@ from html import escape
 
 import httpx2 as httpx
 
-from app.store import AWARD_NAME, AWARD_PATH
-
 LOGGER = logging.getLogger(__name__)
 CONTENT_FIELDS = {
     "text", "animation", "audio", "document", "paid_media", "photo", "sticker",
@@ -48,11 +46,13 @@ def handle_update(update, settings, store, observation_started_at):
         return False
     sender = message.get("from")
     if (not sender or sender.get("is_bot") or "sender_chat" in message
-            or REPLY_FIELDS.intersection(message)
             or not CONTENT_FIELDS.intersection(message)
             or message["date"] <= observation_started_at):
         return False
-    return store.record_message(settings.chat_id, message["message_id"], sender["id"], message["date"])
+    return store.record_message(
+        settings.chat_id, message["message_id"], sender["id"], message["date"],
+        count_for_message_award=not REPLY_FIELDS.intersection(message),
+    )
 
 
 async def poll(settings, store, telegram):
@@ -78,8 +78,8 @@ async def poll(settings, store, telegram):
             await asyncio.sleep(5)
 
 
-async def run_daily(settings, store, telegram, local_date):
-    store.award_daily(local_date)
+async def run_daily(settings, store, telegram, local_date, checked_at=None):
+    store.award_daily(local_date, checked_at)
     await send_pending_digests(settings, store, telegram)
 
 
@@ -94,27 +94,37 @@ async def get_member_name(telegram, chat_id, user_id):
 
 async def send_pending_digests(settings, store, telegram):
     while (digest := store.pending_digest()) is not None:
-        day, users = digest
-        labels = []
-        for user_id in users:
-            name = await get_member_name(telegram, settings.chat_id, user_id)
-            labels.append(name or "Участник чата")
+        day, groups = digest
+        if groups:
+            text = await digest_text(settings, telegram, day, groups)
+            await telegram("sendMessage", chat_id=settings.chat_id, text=text,
+                           parse_mode="HTML", link_preview_options={"is_disabled": True})
+        store.mark_digest_sent(day)
 
-        award_url = escape(settings.public_url + AWARD_PATH)
-        heading = f'🏅 «<a href="{award_url}">{escape(AWARD_NAME)}</a>» · {day}\n'
-        lines = []
-        size = len(heading)
-        for label in labels:
-            line = f"• {escape(label)}\n"
-            if size + len(line) > 3900:
-                lines.append(f"… и ещё {len(labels) - len(lines)}")
+
+async def digest_text(settings, telegram, day, groups):
+    headings = []
+    for group in groups:
+        url = escape(settings.public_url + group.path)
+        tier = f" · {escape(group.tier_name)}" if group.tier_name else ""
+        headings.append(f'🏅 «<a href="{url}">{escape(group.name)}</a>»{tier} · {day}')
+
+    size = sum(len(heading) + 2 for heading in headings)
+    names = {}
+    sections = []
+    for group, heading in zip(groups, headings, strict=True):
+        lines = [heading]
+        for position, user_id in enumerate(group.user_ids):
+            if user_id not in names:
+                names[user_id] = await get_member_name(telegram, settings.chat_id, user_id) or "Участник чата"
+            line = f"• {escape(names[user_id])}"
+            if size + len(line) + 1 > 3900:
+                lines.append(f"… и ещё {len(group.user_ids) - position}")
                 break
             lines.append(line)
-            size += len(line)
-        await telegram("sendMessage", chat_id=settings.chat_id,
-                       text=heading + "".join(lines).rstrip(),
-                       parse_mode="HTML", link_preview_options={"is_disabled": True})
-        store.mark_digest_sent(day)
+            size += len(line) + 1
+        sections.append("\n".join(lines))
+    return "\n\n".join(sections)
 
 
 async def schedule(settings, store, telegram):
@@ -122,7 +132,7 @@ async def schedule(settings, store, telegram):
         now = datetime.now(settings.timezone)
         try:
             if now.time() >= settings.award_time:
-                await run_daily(settings, store, telegram, now.date().isoformat())
+                await run_daily(settings, store, telegram, now.date().isoformat(), now.timestamp())
             else:
                 await send_pending_digests(settings, store, telegram)
         except (TelegramError, sqlite3.Error) as exc:

@@ -21,11 +21,13 @@
     <h1>{{ "Мои ачивки" if own_profile else participant_name }}</h1>
     <section>
         <h2>Актуальные ачивки</h2>
-        {% if day %}<p><a href="{{ award_path }}">{{ award_name }}</a></p>
-        {% else %}<p>Пока нет ачивок.</p>{% endif %}
+        {% for award in current %}
+        <p><a href="{{ award.path }}">{{ award.name }}</a>{% if award.tier %} · {{ award.tier }}{% endif %}</p>
+        {% else %}<p>Пока нет ачивок.</p>{% endfor %}
         <h2>История</h2>
-        {% if day %}<p><time datetime="{{ day }}">{{ day }}</time> · Получена ачивка «<a href="{{ award_path }}">{{ award_name }}</a>»</p>
-        {% else %}<p>Награждений пока нет.</p>{% endif %}
+        {% for award in history %}
+        <p><time datetime="{{ award.day }}">{{ award.day }}</time> · {{ award.action }} «<a href="{{ award.path }}">{{ award.name }}</a>»{% if award.tier %} · {{ award.tier }}{% endif %}</p>
+        {% else %}<p>Награждений пока нет.</p>{% endfor %}
     </section>
     <section>
         <h2>Сбор данных</h2>

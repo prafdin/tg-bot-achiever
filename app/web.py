@@ -14,11 +14,15 @@ from starlette.responses import FileResponse, PlainTextResponse, RedirectRespons
 from starlette.routing import Route
 from starlette.templating import Jinja2Templates
 
-from app.store import AWARD_MESSAGE_COUNT, AWARD_NAME, AWARD_PATH, AWARD_SLUG
+from app.store import (
+    AWARD_MESSAGE_COUNT, AWARD_NAME, AWARD_PATH, AWARD_SLUG,
+    SILENCE_NAME, SILENCE_PATH, SILENCE_SLUG, SILENCE_TIERS,
+)
 
 
 LOGGER = logging.getLogger(__name__)
 OAUTH_ERRORS = {"access_denied", "invalid_client", "invalid_grant", "invalid_request", "unauthorized_client"}
+ACHIEVEMENT_PATHS = {AWARD_SLUG: AWARD_PATH, SILENCE_SLUG: SILENCE_PATH}
 
 
 def create_app(settings, store, lifespan=None):
@@ -48,7 +52,23 @@ def create_app(settings, store, lifespan=None):
         context = {"identity": identity, "own_profile": own_profile, "participant_name": name}
         if identity is not None:
             enabled, day = store.profile(identity)
-            context.update(day=day, award_name=AWARD_NAME, award_path=AWARD_PATH,
+            current = []
+            history = []
+            if day:
+                award = {"name": AWARD_NAME, "path": AWARD_PATH, "day": day,
+                         "action": "Получена ачивка"}
+                current.append(award)
+                history.append(award)
+            silence_history = [
+                {"name": SILENCE_NAME, "path": SILENCE_PATH, "day": awarded_day,
+                 "action": "Получена ачивка" if tier == 1 else "Повышен тир",
+                 "tier": SILENCE_TIERS[tier - 1].name}
+                for tier, awarded_day in store.silence_history(identity)
+            ]
+            if silence_history:
+                current.append(silence_history[-1])
+                history.extend(silence_history)
+            context.update(current=current, history=sorted(history, key=lambda item: item["day"], reverse=True),
                            enabled=enabled, paused=getattr(settings, "paused", False))
         if own_profile:
             context["csrf"] = request.session.setdefault("csrf", secrets.token_urlsafe(32))
@@ -92,19 +112,24 @@ def create_app(settings, store, lifespan=None):
 
     async def achievement(request):
         headers = {"Cache-Control": "no-store"}
-        if user_id(request) is None:
-            return RedirectResponse(f"/login?achievement={AWARD_SLUG}", status_code=303, headers=headers)
-        if not store.achievement_discovered():
+        slug = request.path_params["slug"]
+        if slug not in ACHIEVEMENT_PATHS:
             return PlainTextResponse("Ачивка не найдена.", status_code=404, headers=headers)
-        return templates.TemplateResponse(request, "achievement.html", {
+        if user_id(request) is None:
+            return RedirectResponse(f"/login?achievement={slug}", status_code=303, headers=headers)
+        if not store.achievement_discovered(slug):
+            return PlainTextResponse("Ачивка не найдена.", status_code=404, headers=headers)
+        description = {"award_name": SILENCE_NAME, "tiers": SILENCE_TIERS} if slug == SILENCE_SLUG else {
             "award_name": AWARD_NAME,
             "message_count": AWARD_MESSAGE_COUNT,
-        }, headers=headers)
+        }
+        return templates.TemplateResponse(request, "achievement.html", description, headers=headers)
 
     async def login(request):
         request.session.clear()
-        if request.query_params.get("achievement") == AWARD_SLUG:
-            request.session["achievement"] = AWARD_SLUG
+        slug = request.query_params.get("achievement")
+        if slug in ACHIEVEMENT_PATHS:
+            request.session["achievement"] = slug
         try:
             return await request.app.state.telegram.authorize_redirect(
                 request, settings.public_url + "/auth/callback")
@@ -132,7 +157,7 @@ def create_app(settings, store, lifespan=None):
             return PlainTextResponse("Не удалось проверить ответ Telegram.", status_code=400)
         except httpx.HTTPError:
             return PlainTextResponse("Вход временно недоступен.", status_code=502)
-        achievement_requested = request.session.get("achievement") == AWARD_SLUG
+        destination = ACHIEVEMENT_PATHS.get(request.session.get("achievement"), "/")
         request.session.clear()
         if type(identity) is str:
             identity = allowed_ids_by_text.get(identity)
@@ -140,7 +165,7 @@ def create_app(settings, store, lifespan=None):
             LOGGER.warning("Telegram login: missing or disallowed Telegram ID")
             return PlainTextResponse("Доступ к профилю закрыт.", status_code=403)
         request.session["user_id"] = identity
-        return RedirectResponse(AWARD_PATH if achievement_requested else "/", status_code=303)
+        return RedirectResponse(destination, status_code=303)
 
     async def consent(request):
         identity = user_id(request)
@@ -158,7 +183,7 @@ def create_app(settings, store, lifespan=None):
         return RedirectResponse("/", status_code=303)
 
     app = Starlette(lifespan=lifespan, routes=[
-        Route("/", profile), Route(AWARD_PATH, achievement), Route("/login", login),
+        Route("/", profile), Route("/achievements/{slug}", achievement), Route("/login", login),
         Route("/data-policy", data_policy), Route("/favicon.png", favicon),
         Route("/participants", participants), Route("/participants/{identity:int}", participant_profile),
         Route("/auth/callback", callback),
